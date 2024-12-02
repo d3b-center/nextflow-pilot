@@ -1,0 +1,110 @@
+{
+  "calling_intervallist": {
+    "description": "interval list used to aid scattering HaplotypeCaller",
+    "optional": true
+  },
+  "contamination_bed": {
+    "description": ".bed file for markers used in this analysis",
+    "optional": true
+  },
+  "contamination_mu": {
+    "description": ".mu matrix file of genotype matrix",
+    "optional": true
+  },
+  "contamination_ud": {
+    "description": ".UD matrix file from SVD result of genotype matrix",
+    "optional": true
+  },
+  "coverage_intervallist": {
+    "description": "An interval list file that contains the positions to restrict the wgs metrics assessment",
+    "optional": false
+  },
+  "cram_fasta": {
+    "description": "If aligning from cram, need to provided reference used to generate that cram",
+    "optional": true
+  },
+  "cutadapt_min_len": {
+    "description": "If adapter trimming, discard reads/read-pairs where the read length is less than this value. Set to 0 to turn off", 
+    "optional": true
+  },
+  "cutadapt_quality_base": {
+    "description": "If adapter trimming, use this value as the base quality score. Defaults to 33 but very old reads might need this value set to 64",
+    "optional": true
+  },
+  "cutadapt_quality_cutoff": {
+    "description": "If adapter trimming, remove bases from the 3'/5' that fail to meet this cutoff value",
+    "optional": true
+  },
+  "cutadapt_r1_adapter": {
+    "description": "If read1 reads have an adapter, provide regular 3' adapter sequence here to remove it from read1",
+    "optional": true
+  },
+  "cutadapt_r2_adapter": {
+    "description": "If read1 reads have an adapter, provide regular 3' adapter sequence here to remove it from read2",
+    "optional": true
+  },
+  "dbsnp_vcf": {
+    "description": "dbSNP vcf file",
+    "optional": false
+  },
+  "dbsnp_vcf_index": {
+    "description": "dbSNP vcf index file",
+    "optional": false
+  },
+  "evaluation_intervallist": {
+    "description": "Target intervals to restrict gvcf metric analysis (for VariantCallingMetrics)",
+    "optional": false
+  },
+  "in": {
+    "description": "File to realign",
+    "optional": false
+  },
+  "knownsites": {
+    "description": "List of files containing known polymorphic sites used to exclude regions around known polymorphisms from analysis",
+    "optional": false
+  },
+  "knownsites_indexes": {
+    "description": "Corresponding indexes for the knownsites",
+    "optional": false
+  },
+  "max_cpus": {
+    "description": "Maximum CPUs for Nextflow tasks",
+    "optional": true
+  },
+  "max_memory": {
+    "description": "Maximum memory for Nextflow tasks",
+    "optional": true
+  },
+  "max_time": {
+    "description": "Maximum runtime for Nextflow tasks",
+    "optional": true
+  },
+  "outdir": {
+    "description": "Location to store outputs. For healthomics it must be /mnt/workflow/pubdir",
+    "optional": false
+  },
+  "output_basename": {
+    "description": "String to use as the base for output filenames",
+    "optional": true
+  },
+  "precalc_contam": {
+    "description": "Precalucalted contamination of sample",
+    "optional": true
+  },
+  "reference_tar": {
+    "description": "Tar file containing a reference fasta and, optionally, its complete set of associated indexes (samtools, bwa, and picard)",
+    "optional": false
+  },
+  "sample": {
+    "description": "String name of biospcimen",
+    "optional": true
+  },
+  "test_aws": {
+    "description": "Use AWS ECR dockers",
+    "optional": true
+  },
+  "wgs_or_wxs": {
+    "description": "Is the sample: WGS or WXS?",
+    "optional": true
+  }
+}

@@ -1,0 +1,58 @@
+{
+    "variables": {
+      "aws_region": "us-east-1",
+      "instance_type": "t3.micro",
+      "nextflow_version": "22.10.0"
+    },
+    "builders": [
+      {
+        "type": "amazon-ebs",
+        "region": "{{user `aws_region`}}",
+        "instance_type": "{{user `instance_type`}}",
+        "source_ami_filter": {
+          "filters": {
+            "name": "al2023-ami-2023.6.20241010.0-kernel-6.1-x86_64",
+            "root-device-type": "ebs",
+            "virtualization-type": "hvm",
+            "architecture": "x86_64"
+          },
+          "owners": ["137112412989"],
+          "most_recent": true
+        },
+        "ssh_username": "ec2-user",
+        "subnet_filter": {
+          "filters": {
+            "tag:Name": "*-service-us-east-1-vpc-public-us-east-1b"
+          }
+        },
+        "ami_name": "nextflow-ami-{{timestamp}}"
+      }
+    ],
+    "provisioners": [
+      {
+        "type": "shell",
+        "inline": [
+          "sudo yum update -y",
+          "sudo yum install -y java-17-amazon-corretto docker git",
+          "sudo yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm",
+          "java --version"
+        ]
+      },
+      {
+        "type": "shell",
+        "inline": [
+          "curl -s https://get.nextflow.io | bash",
+          "chmod +x nextflow",
+          "sudo mv nextflow /usr/local/bin/"
+        ]
+      },
+      {
+        "type": "shell",
+        "inline": [
+          "nextflow info",
+          "sudo nextflow self-update"
+        ]
+      }
+    ]
+  }
+  

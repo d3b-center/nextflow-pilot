@@ -1,0 +1,36 @@
+{
+    "image": "${image_url}",
+    "resourceRequirements" : [
+        {
+            "type": "VCPU",
+            "value" : "${batch_vcpus}"
+        },
+        {
+            "type": "MEMORY",
+            "value" : "${batch_memory}"
+        }
+    ],
+    "executionRoleArn": "${ecs_execution_role_arn}", 
+    "secrets": [
+
+    ],
+    "environment": [
+
+    ],
+    "volumes": [
+        {
+            "host": {
+                "sourcePath": "/media/ephemeral0"
+            },
+            "name": "ephemeral0"
+        }
+    ],
+    "mountPoints": [
+        {
+            "containerPath": "/tmp",
+            "readOnly": false,
+            "sourceVolume": "ephemeral0"
+        }
+    ],
+    "privileged": false
+}

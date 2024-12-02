@@ -1,0 +1,21 @@
+{
+  "StartAt": "RunBatch",
+  "TimeoutSeconds": 259200,
+  "States": {
+    "RunBatch": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::batch:submitJob.sync",
+      "Parameters": {
+        "JobName": "SampleBatchJob",
+        "JobQueue": "${batch_job_queue_arn}",
+        "JobDefinition": "${batch_job_definition_arn}"
+      },
+      "Next": "Done",
+      "ResultPath": null
+    },
+    "Done": {
+      "Type": "Pass",
+      "End": true
+    }
+  }
+}
