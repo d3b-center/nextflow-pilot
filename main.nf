@@ -20,7 +20,7 @@ include { PICARD_COLLECTSEQUENCINGARTIFACTMETRICS } from './modules/local/picard
 include { PICARD_QUALITYSCOREDISTRIBUTION } from './modules/local/picard/qualityscoredistribution/main'
 include { PICARD_COLLECTWGSMETRICS } from './modules/local/picard/collectwgsmetrics/main'
 include { PICARD_COLLECTHSMETRICS } from './modules/local/picard/collecthsmetrics/main'
-include { SAMTOOLS_IDXSTATS_XY } from './modules/local/samtools/idxstats_xy/main.nf'
+include { SAMTOOLS_IDXSTATS } from './modules/nf-core/samtools/idxstats/main.nf'
 include { SAMTOOLS_VIEW_CRAM } from './modules/local/samtools/view_cram/main'
 include { VERIFYBAMID_VERIFYBAMID2 } from './modules/nf-core/verifybamid/verifybamid2/main'
 include { PICARD_INTERVALLISTTOOLS } from './modules/local/picard/intervallisttools/main'
@@ -118,7 +118,13 @@ workflow {
     PICARD_COLLECTINSERTSIZEMETRICS(PICARD_GATHERBAMFILES.out.merged_bam, ref_fasta, ref_fai)
     PICARD_COLLECTSEQUENCINGARTIFACTMETRICS(PICARD_GATHERBAMFILES.out.merged_bam, ref_fasta, ref_fai)
     PICARD_QUALITYSCOREDISTRIBUTION(PICARD_GATHERBAMFILES.out.merged_bam, ref_fasta, ref_fai)
-    SAMTOOLS_IDXSTATS_XY(PICARD_GATHERBAMFILES.out.merged_bam)
+
+    SAMTOOLS_IDXSTATS(PICARD_GATHERBAMFILES.out.merged_bam)
+    idxstats_rows = idxstats.splitCsv(sep: '\t', header: ['seqName', 'seqLen', 'readsMapped', 'readsUnmapped'])
+    xy_info = idxstats_rows.filter{ row -> row.seqName == 'chrX' || row.seqName == 'chrY' }.map{ row -> [row.readsMapped.toInteger(), row.readsMapped.toInteger() / row.seqLen.toInteger()] }.collect().view()
+    xy_ratios = xy_info.map{ xreads, xrat, yreads, yrat -> ["Y_reads_fraction " + yreads/(xreads + yreads), "X:Y_ratio " + xrat/yrat, "X_norm_reads $xrat", "Y_norm_reads $yrat", "Y_norm_reads_fraction " + yrat/(xrat+yrat)]}
+    xy_ratios.flatten().collectFile(name: "${params.output_basename}.ratio.txt", storeDir: "${params.outdir}/metrics/", newLine: true)
+
     if (params.wgs_or_wxs == "WXS") {
       PICARD_COLLECTHSMETRICS(PICARD_GATHERBAMFILES.out.merged_bam, ref_fasta, ref_fai, coverage_intervallist, coverage_intervallist)
     } else {
