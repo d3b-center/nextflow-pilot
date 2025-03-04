@@ -27,13 +27,14 @@ include { PICARD_INTERVALLISTTOOLS } from './modules/local/picard/intervallistto
 include { GATK4_HAPLOTYPECALLER } from './modules/local/gatk/haplotypecaller/main'
 include { PICARD_MERGEVCFS_RENAMESAMPLE } from './modules/local/picard/mergevcfs_renamesample/main'
 include { PICARD_COLLECTVARIANTCALLINGMETRICS } from './modules/local/picard/collectvariantcallingmetrics/main'
+include { TABIX_TABIX } from './modules/nf-core/tabix/tabix/main.nf'
 
 workflow {
     in_bam = Channel.fromPath(params.in).flatten().map { file -> [["inbam": file.getBaseName()], file] }
     cram_fasta = params.cram_fasta ? Channel.fromPath(params.cram_fasta).first() : Channel.value([])
     reference_tar = Channel.fromPath(params.reference_tar).first()
-    knownsites = params.knownsites ? Channel.fromPath(params.knownsites).collect() : Channel.value([])
-    knownsites_indexes = params.knownsites_indexes ? Channel.fromPath(params.knownsites_indexes).collect() : Channel.value([])
+    knownsites = params.knownsites ? Channel.fromPath(params.knownsites) : Channel.value([])
+    knownsites_indexes = params.knownsites_indexes ? Channel.fromPath(params.knownsites_indexes) : Channel.value([])
     coverage_intervallist = params.coverage_intervallist ? Channel.fromPath(params.coverage_intervallist).first() : Channel.value([])
     evaluation_intervallist = params.evaluation_intervallist ? Channel.fromPath(params.evaluation_intervallist).first() : Channel.value([])
     calling_intervallist = params.calling_intervallist ? Channel.fromPath(params.calling_intervallist).first() : Channel.value([])
@@ -42,6 +43,17 @@ workflow {
     contamination_ud = params.contamination_ud ? Channel.fromPath(params.contamination_ud).first() : Channel.value([])
     dbsnp_vcf = params.dbsnp_vcf ? Channel.fromPath(params.dbsnp_vcf).first() : Channel.value([])
     dbsnp_vcf_index = params.dbsnp_vcf_index ? Channel.fromPath(params.dbsnp_vcf_index).first() : Channel.value([])
+
+
+    ks = knownsites.map{ file -> [file.fileName.toString(), file]}
+    ksi = knownsites_indexes.map{ file -> [file.baseName.toString(), file]}
+    knownsite = ks.join(ksi, remainder: true).branch{ _, file, index ->
+        indexed: index != null
+        unindexed: index == null
+    }
+    TABIX_TABIX(knownsite.unindexed.map{ meta, file, _ -> [["id": meta], file]})
+    knownsites_indexes = TABIX_TABIX.out.tbi.map{ _, file -> file}.concat(knownsites_indexes).collect()
+    knownsites = knownsites.collect()
 
     SAMTOOLS_SPLIT(in_bam, cram_fasta)
 
