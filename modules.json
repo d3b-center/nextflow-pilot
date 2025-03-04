@@ -89,9 +89,9 @@
                             "modules"
                         ]
                     },
-                    "verifybamid/verifybamid": {
+                    "verifybamid/verifybamid2": {
                         "branch": "master",
-                        "git_sha": "81880787133db07d9b4c1febd152c090eb8325dc",
+                        "git_sha": "791d6b519889737f5fffb4e665ab1489b863161f",
                         "installed_by": [
                             "modules"
                         ]

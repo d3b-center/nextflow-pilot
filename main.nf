@@ -22,7 +22,7 @@ include { PICARD_COLLECTWGSMETRICS } from './modules/local/picard/collectwgsmetr
 include { PICARD_COLLECTHSMETRICS } from './modules/local/picard/collecthsmetrics/main'
 include { SAMTOOLS_IDXSTATS_XY } from './modules/local/samtools/idxstats_xy/main.nf'
 include { SAMTOOLS_VIEW_CRAM } from './modules/local/samtools/view_cram/main'
-include { VERIFYBAMID } from './modules/local/verifybamid/main'
+include { VERIFYBAMID_VERIFYBAMID2 } from './modules/nf-core/verifybamid/verifybamid2/main'
 include { PICARD_INTERVALLISTTOOLS } from './modules/local/picard/intervallisttools/main'
 include { GATK4_HAPLOTYPECALLER } from './modules/local/gatk/haplotypecaller/main'
 include { PICARD_MERGEVCFS_RENAMESAMPLE } from './modules/local/picard/mergevcfs_renamesample/main'
@@ -41,6 +41,7 @@ workflow {
     contamination_bed = params.contamination_bed ? Channel.fromPath(params.contamination_bed).first() : Channel.value([])
     contamination_mu = params.contamination_mu ? Channel.fromPath(params.contamination_mu).first() : Channel.value([])
     contamination_ud = params.contamination_ud ? Channel.fromPath(params.contamination_ud).first() : Channel.value([])
+    svds = contamination_ud.combine(contamination_mu).combine(contamination_bed)
     dbsnp_vcf = params.dbsnp_vcf ? Channel.fromPath(params.dbsnp_vcf).first() : Channel.value([])
     dbsnp_vcf_index = params.dbsnp_vcf_index ? Channel.fromPath(params.dbsnp_vcf_index).first() : Channel.value([])
 
@@ -127,8 +128,8 @@ workflow {
     if (params.precalc_contam) {
       contamination = params.precalc_contam
     } else {
-      VERIFYBAMID(PICARD_GATHERBAMFILES.out.merged_bam, ref_fasta, ref_fai, contamination_bed, contamination_mu, contamination_ud)
-      contamination = VERIFYBAMID.out.contamination_estimation.map { meta, tsv -> tsv }.splitCsv(header: true, sep: '\t').filter { row -> row.FREEMIX != null }.first().FREEMIX.toFloat() / 0.75
+      VERIFYBAMID_VERIFYBAMID2(PICARD_GATHERBAMFILES.out.merged_bam, svds, Channel.value([]), ref_fasta)
+      contamination = VERIFYBAMID_VERIFYBAMID2.out.self_sm.map { meta, tsv -> tsv }.splitCsv(header: true, sep: '\t').filter { row -> row.'FREEMIX(alpha)' != null }.first().view().'FREEMIX(alpha)'.toFloat() / 0.75
     }
 
     PICARD_INTERVALLISTTOOLS(calling_intervallist)
