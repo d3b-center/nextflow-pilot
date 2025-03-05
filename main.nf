@@ -2,7 +2,7 @@
 
 include { UNTAR } from './modules/nf-core/untar/main'
 include { SAMTOOLS_SPLIT } from './modules/local/samtools/split/main'
-include { SAMTOOLS_VIEW_RG } from './modules/local/samtools/view_rg/main'
+include { SAMTOOLS_VIEW as SAMTOOLS_VIEW_RG } from './modules/nf-core/samtools/view/main.nf'
 include { BIOBAMBAM_BAMTOFASTQ } from './modules/local/biobambam/bamtofastq/main'
 include { CUTADAPT } from './modules/local/cutadapt/main'
 include { BWA_MEM } from './modules/local/bwa/mem/main'
@@ -21,7 +21,7 @@ include { PICARD_QUALITYSCOREDISTRIBUTION } from './modules/local/picard/quality
 include { PICARD_COLLECTWGSMETRICS } from './modules/local/picard/collectwgsmetrics/main'
 include { PICARD_COLLECTHSMETRICS } from './modules/local/picard/collecthsmetrics/main'
 include { SAMTOOLS_IDXSTATS } from './modules/nf-core/samtools/idxstats/main.nf'
-include { SAMTOOLS_VIEW_CRAM } from './modules/local/samtools/view_cram/main'
+include { SAMTOOLS_VIEW as SAMTOOLS_VIEW_CRAM } from './modules/nf-core/samtools/view/main.nf'
 include { VERIFYBAMID_VERIFYBAMID2 } from './modules/nf-core/verifybamid/verifybamid2/main'
 include { PICARD_INTERVALLISTTOOLS } from './modules/local/picard/intervallisttools/main'
 include { GATK4_HAPLOTYPECALLER } from './modules/local/gatk/haplotypecaller/main'
@@ -60,7 +60,10 @@ workflow {
 
     rg_bams = SAMTOOLS_SPLIT.out.rg_bams.transpose().map { meta, file -> [meta + ["rgbam": file.getBaseName(), "single_end": false], file] }
 
-    SAMTOOLS_VIEW_RG(rg_bams)
+    SAMTOOLS_VIEW_RG(rg_bams.map{ meta, file -> [meta, file, []]}, Channel.value([[],[]]), Channel.value([]))
+    // Each file should only have one RG. Use find to get the first @RG line from the header
+    rg_lines = SAMTOOLS_VIEW_RG.out.sam.map{ meta, file -> [meta, file.readLines().find{ it.startsWith("@RG") }]}
+
     BIOBAMBAM_BAMTOFASTQ(rg_bams, cram_fasta)
     rg_fqs = BIOBAMBAM_BAMTOFASTQ.out.fastq
 
@@ -69,15 +72,15 @@ workflow {
       rg_fqs = CUTADAPT.out.reads
     }
 
-    split_rg_fqs = rg_fqs.join(SAMTOOLS_VIEW_RG.out.rg_lines).map { meta, fastq, rgtxt -> [meta + ["rgline": rgtxt.text.trim()], fastq.splitFastq(by: 170_000_000, file: true)] }.transpose()
+    split_rg_fqs = rg_fqs.join(rg_lines).map { meta, fastq, rgtxt -> [meta + ["rgline": rgtxt], fastq.splitFastq(by: 170_000_000, file: true)] }.transpose()
 
     if (params.sample) {
         split_rg_fqs = split_rg_fqs.map { meta, file -> meta.rgline = meta.rgline.replaceFirst(/\tSM:\S+\t/, "\tSM:${params.sample}\t"); [meta, file] }
     }
 
     UNTAR(reference_tar.map{ file -> [[:], file]})
-    index_reference = UNTAR.out.untar.map { meta, directory -> directory.listFiles() }
-    refs = reference_files.flatten().branch { file ->
+    indexed_reference = UNTAR.out.untar.map { meta, directory -> directory.listFiles() }
+    refs = indexed_reference.flatten().branch { file ->
         fasta: ["fa","fasta"].contains(file.extension)
         fai: file.extension == "fai"
         dict: file.extension == "dict"
@@ -91,7 +94,7 @@ workflow {
     PYTHON_CREATESEQUENCEGROUPS(ref_dict)
 
     bwa_mem_payloads = split_rg_fqs.map { meta, file -> meta.id = meta.rgbam; [meta, file, meta.rgline.replaceAll("\t", "\\\\t"), true] }
-    BWA_MEM(bwa_mem_payloads, index_reference)
+    BWA_MEM(bwa_mem_payloads, indexed_reference)
 
     bams_to_merge = BWA_MEM.out.unsorted_bam.map { meta, file -> [["id": "temp.aligned.duplicates_marked.unsorted"], file] }.groupTuple()
     SAMBAMBA_MERGE(bams_to_merge)
@@ -111,7 +114,7 @@ workflow {
     gather_channel = GATK4_APPLYBQSR.out.recalibrated_bam.toSortedList( { a -> a.simpleName } ).map{ file -> [["id": "temp"], file] }.join(GATK4_APPLYBQSR.out.recalibrated_bai.collect().map{ file -> [["id": "temp"], file] })
     PICARD_GATHERBAMFILES(gather_channel)
 
-    SAMTOOLS_VIEW_CRAM(PICARD_GATHERBAMFILES.out.merged_bam, ref_fasta)
+    SAMTOOLS_VIEW_CRAM(PICARD_GATHERBAMFILES.out.merged_bam, ref_fasta.map{ file -> [[:], file]}, Channel.value([]))
 
     PICARD_COLLECTALIGNMENTSUMMARYMETRICS(PICARD_GATHERBAMFILES.out.merged_bam, ref_fasta, ref_fai)
     PICARD_COLLECTGCBIASMETRICS(PICARD_GATHERBAMFILES.out.merged_bam, ref_fasta, ref_fai)
