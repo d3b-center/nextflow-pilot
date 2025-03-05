@@ -2,7 +2,7 @@
 
 include { UNTAR } from './modules/nf-core/untar/main'
 include { SAMTOOLS_SPLIT } from './modules/local/samtools/split/main'
-include { SAMTOOLS_VIEW as SAMTOOLS_VIEW_RG } from './modules/nf-core/samtools/view/main.nf'
+include { SAMTOOLS_VIEW as SAMTOOLS_VIEW_RG } from './modules/nf-core/samtools/view/main'
 include { BIOBAMBAM_BAMTOFASTQ } from './modules/local/biobambam/bamtofastq/main'
 include { CUTADAPT } from './modules/local/cutadapt/main'
 include { BWA_MEM } from './modules/local/bwa/mem/main'
@@ -20,14 +20,14 @@ include { PICARD_COLLECTSEQUENCINGARTIFACTMETRICS } from './modules/local/picard
 include { PICARD_QUALITYSCOREDISTRIBUTION } from './modules/local/picard/qualityscoredistribution/main'
 include { PICARD_COLLECTWGSMETRICS } from './modules/local/picard/collectwgsmetrics/main'
 include { PICARD_COLLECTHSMETRICS } from './modules/local/picard/collecthsmetrics/main'
-include { SAMTOOLS_IDXSTATS } from './modules/nf-core/samtools/idxstats/main.nf'
-include { SAMTOOLS_VIEW as SAMTOOLS_VIEW_CRAM } from './modules/nf-core/samtools/view/main.nf'
+include { SAMTOOLS_IDXSTATS } from './modules/nf-core/samtools/idxstats/main'
+include { SAMTOOLS_VIEW as SAMTOOLS_VIEW_CRAM } from './modules/nf-core/samtools/view/main'
 include { VERIFYBAMID_VERIFYBAMID2 } from './modules/nf-core/verifybamid/verifybamid2/main'
-include { PICARD_INTERVALLISTTOOLS } from './modules/local/picard/intervallisttools/main'
+include { GATK4_INTERVALLISTTOOLS } from './modules/nf-core/gatk4/intervallisttools/main'
 include { GATK4_HAPLOTYPECALLER } from './modules/local/gatk/haplotypecaller/main'
 include { PICARD_MERGEVCFS_RENAMESAMPLE } from './modules/local/picard/mergevcfs_renamesample/main'
 include { PICARD_COLLECTVARIANTCALLINGMETRICS } from './modules/local/picard/collectvariantcallingmetrics/main'
-include { TABIX_TABIX } from './modules/nf-core/tabix/tabix/main.nf'
+include { TABIX_TABIX } from './modules/nf-core/tabix/tabix/main'
 
 workflow {
     in_bam = Channel.fromPath(params.in).flatten().map { file -> [["inbam": file.getBaseName()], file] }
@@ -141,9 +141,9 @@ workflow {
       contamination = VERIFYBAMID_VERIFYBAMID2.out.self_sm.map { meta, tsv -> tsv }.splitCsv(header: true, sep: '\t').filter { row -> row.'FREEMIX(alpha)' != null }.first().view().'FREEMIX(alpha)'.toFloat() / 0.75
     }
 
-    PICARD_INTERVALLISTTOOLS(calling_intervallist)
+    GATK4_INTERVALLISTTOOLS(calling_intervallist.map{ file -> [["id":"wgs_calling"], file]})
 
-    haplotyper_channel = PICARD_GATHERBAMFILES.out.merged_bam.combine(PICARD_INTERVALLISTTOOLS.out.interval_lists.flatten())
+    haplotyper_channel = PICARD_GATHERBAMFILES.out.merged_bam.combine(PICARD_INTERVALLISTTOOLS.out.interval_lists.map{ _, files -> files }.flatten())
     haplotyper_channel = haplotyper_channel.map { meta, bam, bai, interval -> [["id": interval.parent.toString().split('/').last()], bam, bai, interval] }
     GATK4_HAPLOTYPECALLER(haplotyper_channel, ref_fasta, ref_fai, ref_dict, contamination)
     PICARD_MERGEVCFS_RENAMESAMPLE(GATK4_HAPLOTYPECALLER.out.germline_vcf.map { meta, vcf, tbi -> [["id": "temp"], vcf, tbi] }.groupTuple(), params.sample)
