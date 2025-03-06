@@ -9,9 +9,9 @@ include { BWA_MEM } from './modules/local/bwa/mem/main'
 include { SAMBAMBA_MERGE } from './modules/local/sambamba/merge/main'
 include { SAMBAMBA_SORT } from './modules/local/sambamba/sort/main'
 include { PYTHON_CREATESEQUENCEGROUPS } from './modules/local/python/createsequencegroups/main'
-include { GATK4_BASERECALIBRATOR } from './modules/local/gatk/baserecalibrator/main'
-include { GATK4_GATHERBQSRREPORTS } from './modules/local/gatk/gatherbqsrreports/main'
-include { GATK4_APPLYBQSR } from './modules/local/gatk/applybqsr/main'
+include { GATK4_BASERECALIBRATOR } from './modules/nf-core/gatk4/baserecalibrator/main'
+include { GATK4_GATHERBQSRREPORTS } from './modules/nf-core/gatk4/gatherbqsrreports/main.nf'
+include { GATK4_APPLYBQSR } from './modules/nf-core/gatk4/applybqsr/main'
 include { PICARD_GATHERBAMFILES } from './modules/local/picard/gatherbamfiles/main'
 include { PICARD_COLLECTALIGNMENTSUMMARYMETRICS } from './modules/local/picard/collectalignmentsummarymetrics/main'
 include { PICARD_COLLECTGCBIASMETRICS } from './modules/local/picard/collectgcbiasmetrics/main'
@@ -105,14 +105,14 @@ workflow {
     sequence_intervals = PYTHON_CREATESEQUENCEGROUPS.out.intervals.flatten()
     recal_channel = SAMBAMBA_SORT.out.sorted_bam.combine(sequence_intervals.filter { it.baseName != 'unmapped' }).map{ meta, bam, bai, interval -> [["id": interval.simpleName], bam, bai, interval] }
 
-    GATK4_BASERECALIBRATOR(recal_channel, ref_fasta, ref_fai, ref_dict, knownsites, knownsites_indexes)
+    GATK4_BASERECALIBRATOR(recal_channel, ref_fasta.map{ file -> [[:], file]}, ref_fai.map{ file -> [[:], file]}, ref_dict.map{ file -> [[:], file]}, knownsites.map{ file -> [[:], file]}, knownsites_indexes.map{ file -> [[:], file]})
     GATK4_GATHERBQSRREPORTS(GATK4_BASERECALIBRATOR.out.recalibration_table.map{ meta, file -> [file] }.collect().map{ file -> [["id": "temp"], file] })
 
-    bqsr_channel = SAMBAMBA_SORT.out.sorted_bam.combine(sequence_intervals).map{ meta, bam, bai, interval -> [["id": interval.simpleName], bam, bai, interval] }
-    GATK4_APPLYBQSR(bqsr_channel, ref_fasta, ref_fai, ref_dict, GATK4_GATHERBQSRREPORTS.out.merged_reports.map{ meta, file -> [file] })
+    bqsr_channel = SAMBAMBA_SORT.out.sorted_bam.combine(GATK4_GATHERBQSRREPORTS.out.table.map{ meta, file -> file }).combine(sequence_intervals).map{ meta, bam, bai, bqsr, interval -> [["id": interval.simpleName], bam, bai, bqsr, interval] }
 
-    gather_channel = GATK4_APPLYBQSR.out.recalibrated_bam.toSortedList( { a -> a.simpleName } ).map{ file -> [["id": "temp"], file] }.join(GATK4_APPLYBQSR.out.recalibrated_bai.collect().map{ file -> [["id": "temp"], file] })
-    PICARD_GATHERBAMFILES(gather_channel)
+    GATK4_APPLYBQSR(bqsr_channel, ref_fasta, ref_fai, ref_dict)
+
+    PICARD_GATHERBAMFILES(GATK4_APPLYBQSR.out.bam.map{ meta, file -> file }.collect().map{ files -> [["id": "temp"], files])
 
     SAMTOOLS_VIEW_CRAM(PICARD_GATHERBAMFILES.out.merged_bam, ref_fasta.map{ file -> [[:], file]}, Channel.value([]))
 
@@ -124,7 +124,7 @@ workflow {
 
     SAMTOOLS_IDXSTATS(PICARD_GATHERBAMFILES.out.merged_bam)
     idxstats_rows = idxstats.splitCsv(sep: '\t', header: ['seqName', 'seqLen', 'readsMapped', 'readsUnmapped'])
-    xy_info = idxstats_rows.filter{ row -> row.seqName == 'chrX' || row.seqName == 'chrY' }.map{ row -> [row.readsMapped.toInteger(), row.readsMapped.toInteger() / row.seqLen.toInteger()] }.collect().view()
+    xy_info = idxstats_rows.filter{ row -> row.seqName == 'chrX' || row.seqName == 'chrY' }.map{ row -> [row.readsMapped.toInteger(), row.readsMapped.toInteger() / row.seqLen.toInteger()] }.collect()
     xy_ratios = xy_info.map{ xreads, xrat, yreads, yrat -> ["Y_reads_fraction " + yreads/(xreads + yreads), "X:Y_ratio " + xrat/yrat, "X_norm_reads $xrat", "Y_norm_reads $yrat", "Y_norm_reads_fraction " + yrat/(xrat+yrat)]}
     xy_ratios.flatten().collectFile(name: "${params.output_basename}.ratio.txt", storeDir: "${params.outdir}/metrics/", newLine: true)
 
