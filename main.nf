@@ -5,7 +5,7 @@ include { SAMTOOLS_SPLIT } from './modules/local/samtools/split/main'
 include { SAMTOOLS_VIEW as SAMTOOLS_VIEW_RG } from './modules/nf-core/samtools/view/main'
 include { BIOBAMBAM_BAMTOFASTQ } from './modules/local/biobambam/bamtofastq/main'
 include { CUTADAPT } from './modules/nf-core/cutadapt/main.nf'
-include { CUTADAPT_INTERLEAVED } from './modules/nf-core/cutadapt/main.nf'
+include { CUTADAPT as CUTADAPT_INTERLEAVED } from './modules/nf-core/cutadapt/main.nf'
 include { BWA_MEM } from './modules/local/bwa/mem/main'
 include { SAMBAMBA_MERGE } from './modules/local/sambamba/merge/main'
 include { SAMBAMBA_SORT } from './modules/local/sambamba/sort/main'
@@ -72,8 +72,8 @@ workflow {
     if (params.cutadapt_r1_adapter || params.cutadapt_r2_adapter || params.cutadapt_min_len || params.cutadapt_quality_base || params.cutadapt_quality_cutoff) {
       // Branch files into interleaved and standard
       rg_fqs.branch{ meta, files ->
-          interleaved: !meta.single_end && files.size() == 1
-          standard: true
+           interleaved: !meta.single_end && files.size() == 1
+           standard: true
       }
       CUTADAPT(rg_fqs.standard)
       // We want an single, interleaved output for our interleaved input. Output is controlled by meta.single_end so change it but keep the original value
@@ -97,8 +97,8 @@ workflow {
     }
 
     UNTAR(reference_tar.map{ file -> [[:], file]})
-    indexed_reference = UNTAR.out.untar.map { meta, directory -> directory.listFiles() }
-    refs = indexed_reference.flatten().branch { file ->
+    untarred_files = UNTAR.out.untar.map { meta, directory -> directory.listFiles() }
+    refs = untarred_files.flatten().branch { file ->
         fasta: ["fa","fasta"].contains(file.extension)
         fai: file.extension == "fai"
         dict: file.extension == "dict"
@@ -108,11 +108,12 @@ workflow {
     ref_fai = refs.fai.first()
     ref_dict = refs.dict.first()
     ref_bwa = refs.bwa_refs.collect()
+    indexed_fasta = ref_fasta.concat(ref_fai, ref_dict, ref_bwa).collect()
 
     PYTHON_CREATESEQUENCEGROUPS(ref_dict)
 
     bwa_mem_payloads = split_rg_fqs.map { meta, file -> meta.id = meta.rgbam; [meta, file, meta.rgline.replaceAll("\t", "\\\\t"), true] }
-    BWA_MEM(bwa_mem_payloads, indexed_reference)
+    BWA_MEM(bwa_mem_payloads, indexed_fasta)
 
     bams_to_merge = BWA_MEM.out.unsorted_bam.map { meta, file -> [["id": "temp.aligned.duplicates_marked.unsorted"], file] }.groupTuple()
     SAMBAMBA_MERGE(bams_to_merge)
@@ -124,13 +125,14 @@ workflow {
     recal_channel = SAMBAMBA_SORT.out.sorted_bam.combine(sequence_intervals.filter { it.baseName != 'unmapped' }).map{ meta, bam, bai, interval -> [["id": interval.simpleName], bam, bai, interval] }
 
     GATK4_BASERECALIBRATOR(recal_channel, ref_fasta.map{ file -> [[:], file]}, ref_fai.map{ file -> [[:], file]}, ref_dict.map{ file -> [[:], file]}, knownsites.map{ file -> [[:], file]}, knownsites_indexes.map{ file -> [[:], file]})
-    GATK4_GATHERBQSRREPORTS(GATK4_BASERECALIBRATOR.out.recalibration_table.map{ meta, file -> [file] }.collect().map{ file -> [["id": "temp"], file] })
+    GATK4_GATHERBQSRREPORTS(GATK4_BASERECALIBRATOR.out.table.map{ meta, file -> [file] }.collect().map{ file -> [["id": "temp"], file] })
 
     bqsr_channel = SAMBAMBA_SORT.out.sorted_bam.combine(GATK4_GATHERBQSRREPORTS.out.table.map{ meta, file -> file }).combine(sequence_intervals).map{ meta, bam, bai, bqsr, interval -> [["id": interval.simpleName], bam, bai, bqsr, interval] }
 
     GATK4_APPLYBQSR(bqsr_channel, ref_fasta, ref_fai, ref_dict)
+    gather_channel = GATK4_APPLYBQSR.out.bam.map{ _, file -> file }.toSortedList{ a -> a.simpleName }.map{ files -> [["id": "temp"], files] }
 
-    PICARD_GATHERBAMFILES(GATK4_APPLYBQSR.out.bam.map{ meta, file -> file }.collect().map{ files -> [["id": "temp"], files])
+    PICARD_GATHERBAMFILES(gather_channel)
 
     SAMTOOLS_VIEW_CRAM(PICARD_GATHERBAMFILES.out.merged_bam, ref_fasta.map{ file -> [[:], file]}, Channel.value([]))
 
@@ -141,7 +143,7 @@ workflow {
     PICARD_QUALITYSCOREDISTRIBUTION(PICARD_GATHERBAMFILES.out.merged_bam, ref_fasta, ref_fai)
 
     SAMTOOLS_IDXSTATS(PICARD_GATHERBAMFILES.out.merged_bam)
-    idxstats_rows = idxstats.splitCsv(sep: '\t', header: ['seqName', 'seqLen', 'readsMapped', 'readsUnmapped'])
+    idxstats_rows = SAMTOOLS_IDXSTATS.out.idxstats.map{ _, file -> file }.splitCsv(sep: '\t', header: ['seqName', 'seqLen', 'readsMapped', 'readsUnmapped'])
     xy_info = idxstats_rows.filter{ row -> row.seqName == 'chrX' || row.seqName == 'chrY' }.map{ row -> [row.readsMapped.toInteger(), row.readsMapped.toInteger() / row.seqLen.toInteger()] }.collect()
     xy_ratios = xy_info.map{ xreads, xrat, yreads, yrat -> ["Y_reads_fraction " + yreads/(xreads + yreads), "X:Y_ratio " + xrat/yrat, "X_norm_reads $xrat", "Y_norm_reads $yrat", "Y_norm_reads_fraction " + yrat/(xrat+yrat)]}
     xy_ratios.flatten().collectFile(name: "${params.output_basename}.ratio.txt", storeDir: "${params.outdir}/metrics/", newLine: true)
@@ -156,12 +158,12 @@ workflow {
       contamination = params.precalc_contam
     } else {
       VERIFYBAMID_VERIFYBAMID2(PICARD_GATHERBAMFILES.out.merged_bam, svds, Channel.value([]), ref_fasta)
-      contamination = VERIFYBAMID_VERIFYBAMID2.out.self_sm.map { meta, tsv -> tsv }.splitCsv(header: true, sep: '\t').filter { row -> row.'FREEMIX(alpha)' != null }.first().view().'FREEMIX(alpha)'.toFloat() / 0.75
+      contamination = VERIFYBAMID_VERIFYBAMID2.out.self_sm.map { meta, tsv -> tsv }.splitCsv(header: true, sep: '\t').filter { row -> row.'FREEMIX(alpha)' != null }.first().'FREEMIX(alpha)'.toFloat() / 0.75
     }
 
     GATK4_INTERVALLISTTOOLS(calling_intervallist.map{ file -> [["id":"wgs_calling"], file]})
 
-    haplotyper_channel = PICARD_GATHERBAMFILES.out.merged_bam.combine(PICARD_INTERVALLISTTOOLS.out.interval_lists.map{ _, files -> files }.flatten())
+    haplotyper_channel = PICARD_GATHERBAMFILES.out.merged_bam.combine(GATK4_INTERVALLISTTOOLS.out.interval_list.map{ _, files -> files }.flatten())
     haplotyper_channel = haplotyper_channel.map { meta, bam, bai, interval -> [["id": interval.parent.toString().split('/').last()], bam, bai, interval] }
     GATK4_HAPLOTYPECALLER(haplotyper_channel, ref_fasta, ref_fai, ref_dict, contamination)
     PICARD_MERGEVCFS_RENAMESAMPLE(GATK4_HAPLOTYPECALLER.out.germline_vcf.map { meta, vcf, tbi -> [["id": "temp"], vcf, tbi] }.groupTuple(), params.sample)
