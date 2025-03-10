@@ -4,7 +4,8 @@ include { UNTAR } from './modules/nf-core/untar/main'
 include { SAMTOOLS_SPLIT } from './modules/local/samtools/split/main'
 include { SAMTOOLS_VIEW as SAMTOOLS_VIEW_RG } from './modules/nf-core/samtools/view/main'
 include { BIOBAMBAM_BAMTOFASTQ } from './modules/local/biobambam/bamtofastq/main'
-include { CUTADAPT } from './modules/local/cutadapt/main'
+include { CUTADAPT } from './modules/nf-core/cutadapt/main.nf'
+include { CUTADAPT_INTERLEAVED } from './modules/nf-core/cutadapt/main.nf'
 include { BWA_MEM } from './modules/local/bwa/mem/main'
 include { SAMBAMBA_MERGE } from './modules/local/sambamba/merge/main'
 include { SAMBAMBA_SORT } from './modules/local/sambamba/sort/main'
@@ -67,12 +68,29 @@ workflow {
     BIOBAMBAM_BAMTOFASTQ(rg_bams, cram_fasta)
     rg_fqs = BIOBAMBAM_BAMTOFASTQ.out.fastq
 
+
     if (params.cutadapt_r1_adapter || params.cutadapt_r2_adapter || params.cutadapt_min_len || params.cutadapt_quality_base || params.cutadapt_quality_cutoff) {
-      CUTADAPT(BIOBAMBAM_BAMTOFASTQ.out.fastq)
-      rg_fqs = CUTADAPT.out.reads
+      // Branch files into interleaved and standard
+      rg_fqs.branch{ meta, files ->
+          interleaved: !meta.single_end && files.size() == 1
+          standard: true
+      }
+      CUTADAPT(rg_fqs.standard)
+      // We want an single, interleaved output for our interleaved input. Output is controlled by meta.single_end so change it but keep the original value
+      CUTADAPT_INTERLEAVED(rg_fqs.interleaved.map{ meta, file -> 
+          meta.real_single_end = meta.single_end;
+          meta.single_end = true;
+          [meta, file]
+      })
+      // Return the original single_end value
+      rg_fqs = CUTADAPT.out.reads.concat(CUTADAPT_INTERLEAVED.out.reads.map { meta, file ->
+          meta.single_end = meta.real_single_end;
+          [meta - meta.subMap('real_single_end'), file]
+      })
     }
 
     split_rg_fqs = rg_fqs.join(rg_lines).map { meta, fastq, rgtxt -> [meta + ["rgline": rgtxt], fastq.splitFastq(by: 170_000_000, file: true)] }.transpose()
+
 
     if (params.sample) {
         split_rg_fqs = split_rg_fqs.map { meta, file -> meta.rgline = meta.rgline.replaceFirst(/\tSM:\S+\t/, "\tSM:${params.sample}\t"); [meta, file] }
