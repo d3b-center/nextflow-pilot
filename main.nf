@@ -1,17 +1,18 @@
 #!/usr/bin/env nextflow
 
+include { GATK4_INDEXFEATUREFILE } from './modules/nf-core/gatk4/indexfeaturefile/main'
 include { UNTAR } from './modules/nf-core/untar/main'
 include { SAMTOOLS_SPLIT } from './modules/local/samtools/split/main'
 include { SAMTOOLS_VIEW as SAMTOOLS_VIEW_RG } from './modules/nf-core/samtools/view/main'
 include { BIOBAMBAM_BAMTOFASTQ } from './modules/local/biobambam/bamtofastq/main'
-include { CUTADAPT } from './modules/nf-core/cutadapt/main.nf'
-include { CUTADAPT as CUTADAPT_INTERLEAVED } from './modules/nf-core/cutadapt/main.nf'
+include { CUTADAPT as CUTADAPT_SINGLE } from './modules/nf-core/cutadapt/main'
+include { CUTADAPT as CUTADAPT_PAIRED } from './modules/nf-core/cutadapt/main'
+include { CUTADAPT as CUTADAPT_INTERLEAVED } from './modules/nf-core/cutadapt/main'
 include { BWA_MEM } from './modules/local/bwa/mem/main'
 include { SAMBAMBA_MERGE } from './modules/local/sambamba/merge/main'
-include { SAMBAMBA_SORT } from './modules/local/sambamba/sort/main'
 include { PYTHON_CREATESEQUENCEGROUPS } from './modules/local/python/createsequencegroups/main'
 include { GATK4_BASERECALIBRATOR } from './modules/nf-core/gatk4/baserecalibrator/main'
-include { GATK4_GATHERBQSRREPORTS } from './modules/nf-core/gatk4/gatherbqsrreports/main.nf'
+include { GATK4_GATHERBQSRREPORTS } from './modules/nf-core/gatk4/gatherbqsrreports/main'
 include { GATK4_APPLYBQSR } from './modules/nf-core/gatk4/applybqsr/main'
 include { PICARD_GATHERBAMFILES } from './modules/local/picard/gatherbamfiles/main'
 include { PICARD_COLLECTALIGNMENTSUMMARYMETRICS } from './modules/local/picard/collectalignmentsummarymetrics/main'
@@ -31,21 +32,35 @@ include { PICARD_COLLECTVARIANTCALLINGMETRICS } from './modules/local/picard/col
 include { TABIX_TABIX } from './modules/nf-core/tabix/tabix/main'
 
 workflow {
-    in_bam = Channel.fromPath(params.in).flatten().map { file -> [["inbam": file.getBaseName()], file] }
-    cram_fasta = params.cram_fasta ? Channel.fromPath(params.cram_fasta).first() : Channel.value([])
+    input_aligned_reads = params.input_bam_list ? Channel.fromPath(params.input_bam_list).map { file -> [["inbam": file.getBaseName()], file] } : Channel.value([])
+    input_pe_reads = params.input_pe_reads_list ? Channel.fromPath(params.input_pe_reads_list) : Channel.value([])
+    input_pe_mates = params.input_pe_mates_list ? Channel.fromPath(params.input_pe_mates_list) : Channel.value([])
+    input_pe_rgs = params.input_pe_rgs_list ? Channel.fromList(params.input_pe_rgs_list) : Channel.value([])
+    input_se_reads = params.input_se_reads_list ? Channel.fromPath(params.input_se_reads_list) : Channel.value([])
+    input_se_rgs = params.input_se_rgs_list ? Channel.fromList(params.input_se_rgs_list) : Channel.value([])
+    cram_reference = params.cram_reference ? Channel.fromPath(params.cram_reference).first() : Channel.value([])
     reference_tar = Channel.fromPath(params.reference_tar).first()
     knownsites = params.knownsites ? Channel.fromPath(params.knownsites) : Channel.value([])
     knownsites_indexes = params.knownsites_indexes ? Channel.fromPath(params.knownsites_indexes) : Channel.value([])
-    coverage_intervallist = params.coverage_intervallist ? Channel.fromPath(params.coverage_intervallist).first() : Channel.value([])
-    evaluation_intervallist = params.evaluation_intervallist ? Channel.fromPath(params.evaluation_intervallist).first() : Channel.value([])
-    calling_intervallist = params.calling_intervallist ? Channel.fromPath(params.calling_intervallist).first() : Channel.value([])
-    contamination_bed = params.contamination_bed ? Channel.fromPath(params.contamination_bed).first() : Channel.value([])
-    contamination_mu = params.contamination_mu ? Channel.fromPath(params.contamination_mu).first() : Channel.value([])
-    contamination_ud = params.contamination_ud ? Channel.fromPath(params.contamination_ud).first() : Channel.value([])
-    svds = contamination_ud.combine(contamination_mu).combine(contamination_bed)
+    coverage_intervallist = params.wgs_coverage_interval_list ? Channel.fromPath(params.wgs_coverage_interval_list).first() : Channel.value([])
+    evaluation_intervallist = params.wgs_evaluation_interval_list ? Channel.fromPath(params.wgs_evaluation_interval_list).first() : Channel.value([])
+    calling_intervallist = params.wgs_calling_interval_list ? Channel.fromPath(params.wgs_calling_interval_list).first() : Channel.value([])
+    bait_intervallist = params.wxs_bait_interval_list ? Channel.fromPath(params.wxs_bait_interval_list).first() : Channel.value([])
+    target_intervallist = params.wxs_target_interval_list ? Channel.fromPath(params.wxs_target_interval_list).first() : Channel.value([])
+    contamination_bed = params.contamination_sites_bed ? Channel.fromPath(params.contamination_sites_bed).first() : Channel.value([])
+    contamination_mu = params.contamination_sites_mu ? Channel.fromPath(params.contamination_sites_mu).first() : Channel.value([])
+    contamination_ud = params.contamination_sites_ud ? Channel.fromPath(params.contamination_sites_ud).first() : Channel.value([])
     dbsnp_vcf = params.dbsnp_vcf ? Channel.fromPath(params.dbsnp_vcf).first() : Channel.value([])
-    dbsnp_vcf_index = params.dbsnp_vcf_index ? Channel.fromPath(params.dbsnp_vcf_index).first() : Channel.value([])
 
+    // Housekeeping for References
+    if (params.dbsnp_idx) {
+        dbsnp_idx = Channel.fromPath(params.dbsnp_idx).first()
+    } else {
+        GATK4_INDEXFEATUREFILE(dbsnp_vcf.map{ file -> [["id": file.baseName], file] })
+        dbsnp_idx = GATK4_INDEXFEATUREFILE.out.index.map{ _, file -> file }
+    }
+
+    svds = contamination_ud.combine(contamination_mu).combine(contamination_bed)
 
     ks = knownsites.map{ file -> [file.fileName.toString(), file]}
     ksi = knownsites_indexes.map{ file -> [file.baseName.toString(), file]}
@@ -56,45 +71,6 @@ workflow {
     TABIX_TABIX(knownsite.unindexed.map{ meta, file, _ -> [["id": meta], file]})
     knownsites_indexes = TABIX_TABIX.out.tbi.map{ _, file -> file}.concat(knownsites_indexes).collect()
     knownsites = knownsites.collect()
-
-    SAMTOOLS_SPLIT(in_bam, cram_fasta)
-
-    rg_bams = SAMTOOLS_SPLIT.out.rg_bams.transpose().map { meta, file -> [meta + ["rgbam": file.getBaseName(), "single_end": false], file] }
-
-    SAMTOOLS_VIEW_RG(rg_bams.map{ meta, file -> [meta, file, []]}, Channel.value([[],[]]), Channel.value([]))
-    // Each file should only have one RG. Use find to get the first @RG line from the header
-    rg_lines = SAMTOOLS_VIEW_RG.out.sam.map{ meta, file -> [meta, file.readLines().find{ it.startsWith("@RG") }]}
-
-    BIOBAMBAM_BAMTOFASTQ(rg_bams, cram_fasta)
-    rg_fqs = BIOBAMBAM_BAMTOFASTQ.out.fastq
-
-
-    if (params.cutadapt_r1_adapter || params.cutadapt_r2_adapter || params.cutadapt_min_len || params.cutadapt_quality_base || params.cutadapt_quality_cutoff) {
-      // Branch files into interleaved and standard
-      rg_fqs.branch{ meta, files ->
-           interleaved: !meta.single_end && files.size() == 1
-           standard: true
-      }
-      CUTADAPT(rg_fqs.standard)
-      // We want an single, interleaved output for our interleaved input. Output is controlled by meta.single_end so change it but keep the original value
-      CUTADAPT_INTERLEAVED(rg_fqs.interleaved.map{ meta, file -> 
-          meta.real_single_end = meta.single_end;
-          meta.single_end = true;
-          [meta, file]
-      })
-      // Return the original single_end value
-      rg_fqs = CUTADAPT.out.reads.concat(CUTADAPT_INTERLEAVED.out.reads.map { meta, file ->
-          meta.single_end = meta.real_single_end;
-          [meta - meta.subMap('real_single_end'), file]
-      })
-    }
-
-    split_rg_fqs = rg_fqs.join(rg_lines).map { meta, fastq, rgtxt -> [meta + ["rgline": rgtxt], fastq.splitFastq(by: 170_000_000, file: true)] }.transpose()
-
-
-    if (params.sample) {
-        split_rg_fqs = split_rg_fqs.map { meta, file -> meta.rgline = meta.rgline.replaceFirst(/\tSM:\S+\t/, "\tSM:${params.sample}\t"); [meta, file] }
-    }
 
     UNTAR(reference_tar.map{ file -> [[:], file]})
     untarred_files = UNTAR.out.untar.map { meta, directory -> directory.listFiles() }
@@ -111,23 +87,65 @@ workflow {
     indexed_fasta = ref_fasta.concat(ref_fai, ref_dict, ref_bwa).collect()
 
     PYTHON_CREATESEQUENCEGROUPS(ref_dict)
+    sequence_intervals = PYTHON_CREATESEQUENCEGROUPS.out.intervals.flatten()
 
-    bwa_mem_payloads = split_rg_fqs.map { meta, file -> meta.id = meta.rgbam; [meta, file, meta.rgline.replaceAll("\t", "\\\\t"), true] }
+    // Assemble Paired and Single End FASTQs
+    pe_fastq = input_pe_rgs.merge(input_pe_reads, input_pe_mates).map { rg, read, mate -> [["rg_line": rg, "single_end": false], [read, mate]] }
+    se_fastq = input_se_rgs.merge(input_se_reads).map { rg, read -> [["rg_line": rg, "single_end": true], read] }
+
+    // Process the aligned reads
+    SAMTOOLS_SPLIT(input_aligned_reads, cram_reference)
+
+    rg_bams = SAMTOOLS_SPLIT.out.rg_bams.transpose().map { meta, file -> [meta + ["rgbam": file.getBaseName(), "single_end": false], file] }
+
+    SAMTOOLS_VIEW_RG(rg_bams.map{ meta, file -> [meta, file, []]}, Channel.value([[],[]]), Channel.value([]))
+    // Each file should only have one RG. Use find to get the first @RG line from the header
+    rg_lines = SAMTOOLS_VIEW_RG.out.sam.map{ meta, file -> [meta, file.readLines().find{ it.startsWith("@RG") }]}
+
+    BIOBAMBAM_BAMTOFASTQ(rg_bams, cram_reference)
+    rg_fqs = BIOBAMBAM_BAMTOFASTQ.out.fastq
+
+    if (params.cutadapt_r1_adapter || params.cutadapt_r2_adapter || params.cutadapt_min_len || params.cutadapt_quality_base || params.cutadapt_quality_cutoff) {
+      CUTADAPT_SINGLE(se_fastq)
+      se_fastq = CUTADAPT_SINGLE.out.reads
+      CUTADAPT_PAIRED(pe_fastq)
+      pe_fastq = CUTADAPT_PAIRED.out.reads
+      // We want an single, interleaved output for our interleaved input. Output is controlled by meta.single_end so change it but keep the original value
+      CUTADAPT_INTERLEAVED(rg_fqs.map{ meta, file ->
+          meta.real_single_end = meta.single_end;
+          meta.single_end = true;
+          [meta, file]
+      })
+      // Return the original single_end value
+      rg_fqs = CUTADAPT.out.reads.concat(CUTADAPT_INTERLEAVED.out.reads.map { meta, file ->
+          meta.single_end = meta.real_single_end;
+          [meta - meta.subMap('real_single_end'), file]
+      })
+    }
+
+    // Split large FASTQs; need to flatten paired files so splitFastq can process them
+    split_rg_fqs = rg_fqs.join(rg_lines).map { meta, fastq, rgtxt -> [meta + ["rgline": rgtxt], fastq] }.splitFastq(by: 170_000_000, elem: -1, file: true)
+    split_se_fqs = se_fastq.splitFastq(by: 170_000_000, elem: -1, file: true)
+    split_pe_fqs = pe_fastq.map{ v -> v.flatten() }.splitFastq(by: 170_000_000, pe: true, file: true)
+
+    fq_to_align = split_rg_fqs.mix(split_se_fqs, split_pe_fqs)
+
+    if (params.biospecimen_name) {
+        fq_to_align = fq_to_align.map { meta, file -> meta.rgline = meta.rgline.replaceFirst(/\tSM:\S+\t/, "\tSM:${params.biospecimen_name}\t"); [meta, file] }
+    }
+
+    bwa_mem_payloads = fq_to_align.map { meta, file -> meta.id = meta.rgbam; [meta, file, meta.rgline.replaceAll("\t", "\\\\t"), true] }
     BWA_MEM(bwa_mem_payloads, indexed_fasta)
 
-    bams_to_merge = BWA_MEM.out.unsorted_bam.map { meta, file -> [["id": "temp.aligned.duplicates_marked.unsorted"], file] }.groupTuple()
+    bams_to_merge = BWA_MEM.out.aligned_bam.map { meta, file -> [["id": "temp.aligned.duplicates_marked.sorted"], file] }.groupTuple()
     SAMBAMBA_MERGE(bams_to_merge)
 
-    bam_to_sort = SAMBAMBA_MERGE.out.merged_bam.map { meta, file -> meta.id = "temp.aligned.duplicates_marked.sorted"; [meta, file] }
-    SAMBAMBA_SORT(bam_to_sort)
-
-    sequence_intervals = PYTHON_CREATESEQUENCEGROUPS.out.intervals.flatten()
-    recal_channel = SAMBAMBA_SORT.out.sorted_bam.combine(sequence_intervals.filter { it.baseName != 'unmapped' }).map{ meta, bam, bai, interval -> [["id": interval.simpleName], bam, bai, interval] }
+    recal_channel = SAMBAMBA_MERGE.out.merged_bam.combine(sequence_intervals.filter { it.baseName != 'unmapped' }).map{ meta, bam, bai, interval -> [["id": interval.simpleName], bam, bai, interval] }
 
     GATK4_BASERECALIBRATOR(recal_channel, ref_fasta.map{ file -> [[:], file]}, ref_fai.map{ file -> [[:], file]}, ref_dict.map{ file -> [[:], file]}, knownsites.map{ file -> [[:], file]}, knownsites_indexes.map{ file -> [[:], file]})
     GATK4_GATHERBQSRREPORTS(GATK4_BASERECALIBRATOR.out.table.map{ meta, file -> [file] }.collect().map{ file -> [["id": "temp"], file] })
 
-    bqsr_channel = SAMBAMBA_SORT.out.sorted_bam.combine(GATK4_GATHERBQSRREPORTS.out.table.map{ meta, file -> file }).combine(sequence_intervals).map{ meta, bam, bai, bqsr, interval -> [["id": interval.simpleName], bam, bai, bqsr, interval] }
+    bqsr_channel = SAMBAMBA_MERGE.out.merged_bam.combine(GATK4_GATHERBQSRREPORTS.out.table.map{ meta, file -> file }).combine(sequence_intervals).map{ meta, bam, bai, bqsr, interval -> [["id": interval.simpleName], bam, bai, bqsr, interval] }
 
     GATK4_APPLYBQSR(bqsr_channel, ref_fasta, ref_fai, ref_dict)
     gather_channel = GATK4_APPLYBQSR.out.bam.map{ _, file -> file }.toSortedList{ a -> a.simpleName }.map{ files -> [["id": "temp"], files] }
@@ -149,13 +167,13 @@ workflow {
     xy_ratios.flatten().collectFile(name: "${params.output_basename}.ratio.txt", storeDir: "${params.outdir}/metrics/", newLine: true)
 
     if (params.wgs_or_wxs == "WXS") {
-      PICARD_COLLECTHSMETRICS(PICARD_GATHERBAMFILES.out.merged_bam, ref_fasta, ref_fai, coverage_intervallist, coverage_intervallist)
+      PICARD_COLLECTHSMETRICS(PICARD_GATHERBAMFILES.out.merged_bam, ref_fasta, ref_fai, bait_intervallist, target_intervallist)
     } else {
       PICARD_COLLECTWGSMETRICS(PICARD_GATHERBAMFILES.out.merged_bam, ref_fasta, ref_fai, coverage_intervallist)
     }
 
-    if (params.precalc_contam) {
-      contamination = params.precalc_contam
+    if (params.precalculated_contamination) {
+      contamination = Channel.value(params.precalculated_contamination)
     } else {
       VERIFYBAMID_VERIFYBAMID2(PICARD_GATHERBAMFILES.out.merged_bam, svds, Channel.value([]), ref_fasta)
       contamination = VERIFYBAMID_VERIFYBAMID2.out.self_sm.map { meta, tsv -> tsv }.splitCsv(header: true, sep: '\t').filter { row -> row.'FREEMIX(alpha)' != null }.first().'FREEMIX(alpha)'.toFloat() / 0.75
@@ -166,6 +184,6 @@ workflow {
     haplotyper_channel = PICARD_GATHERBAMFILES.out.merged_bam.combine(GATK4_INTERVALLISTTOOLS.out.interval_list.map{ _, files -> files }.flatten())
     haplotyper_channel = haplotyper_channel.map { meta, bam, bai, interval -> [["id": interval.parent.toString().split('/').last()], bam, bai, interval] }
     GATK4_HAPLOTYPECALLER(haplotyper_channel, ref_fasta, ref_fai, ref_dict, contamination)
-    PICARD_MERGEVCFS_RENAMESAMPLE(GATK4_HAPLOTYPECALLER.out.germline_vcf.map { meta, vcf, tbi -> [["id": "temp"], vcf, tbi] }.groupTuple(), params.sample)
-    PICARD_COLLECTVARIANTCALLINGMETRICS(PICARD_MERGEVCFS_RENAMESAMPLE.out.merged_vcf, dbsnp_vcf, dbsnp_vcf_index, evaluation_intervallist, ref_dict)
+    PICARD_MERGEVCFS_RENAMESAMPLE(GATK4_HAPLOTYPECALLER.out.germline_vcf.map { meta, vcf, tbi -> [["id": "temp"], vcf, tbi] }.groupTuple(), params.biospecimen_name)
+    PICARD_COLLECTVARIANTCALLINGMETRICS(PICARD_MERGEVCFS_RENAMESAMPLE.out.merged_vcf, dbsnp_vcf, dbsnp_idx, evaluation_intervallist, ref_dict)
 }

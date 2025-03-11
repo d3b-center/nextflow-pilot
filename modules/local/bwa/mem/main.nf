@@ -7,7 +7,7 @@ process BWA_MEM {
     path(fasta)
 
     output:
-    tuple val(meta), path('*.bam'), emit: unsorted_bam
+    tuple val(meta), path('*.bam'), emit: aligned_bam
 
     when:
     task.ext.when == null || task.ext.when
