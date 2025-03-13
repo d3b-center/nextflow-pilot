@@ -28,20 +28,23 @@ include { VERIFYBAMID_VERIFYBAMID2 } from './modules/nf-core/verifybamid/verifyb
 include { GATK4_INTERVALLISTTOOLS } from './modules/nf-core/gatk4/intervallisttools/main'
 include { GATK4_HAPLOTYPECALLER } from './modules/local/gatk/haplotypecaller/main'
 include { PICARD_MERGEVCFS_RENAMESAMPLE } from './modules/local/picard/mergevcfs_renamesample/main'
+include { GATK4_MERGEVCFS } from './modules/nf-core/gatk4/mergevcfs/main'
+include { PICARD_RENAMESAMPLEINVCF } from './modules/nf-core/picard/renamesampleinvcf/main'
 include { PICARD_COLLECTVARIANTCALLINGMETRICS } from './modules/local/picard/collectvariantcallingmetrics/main'
 include { TABIX_TABIX } from './modules/nf-core/tabix/tabix/main'
+include { TABIX_TABIX as TABIX_TABIX_GVCF } from './modules/nf-core/tabix/tabix/main'
 
 workflow {
-    input_aligned_reads = params.input_bam_list ? Channel.fromPath(params.input_bam_list).map { file -> [["inbam": file.getBaseName()], file] } : Channel.value([])
-    input_pe_reads = params.input_pe_reads_list ? Channel.fromPath(params.input_pe_reads_list) : Channel.value([])
-    input_pe_mates = params.input_pe_mates_list ? Channel.fromPath(params.input_pe_mates_list) : Channel.value([])
-    input_pe_rgs = params.input_pe_rgs_list ? Channel.fromList(params.input_pe_rgs_list) : Channel.value([])
-    input_se_reads = params.input_se_reads_list ? Channel.fromPath(params.input_se_reads_list) : Channel.value([])
-    input_se_rgs = params.input_se_rgs_list ? Channel.fromList(params.input_se_rgs_list) : Channel.value([])
+    input_aligned_reads = params.input_bam_list ? Channel.fromPath(params.input_bam_list.class == String ? params.input_bam_list.split(',') as List : params.input_bam_list).map { file -> [["inbam": file.getBaseName()], file] } : Channel.empty()
+    input_pe_reads = params.input_pe_reads_list ? Channel.fromPath(params.input_pe_reads_list.class == String ? params.input_pe_reads_list.split(',') as List : params.input_pe_reads_list) : Channel.empty()
+    input_pe_mates = params.input_pe_mates_list ? Channel.fromPath(params.input_pe_mates_list.class == String ? params.input_pe_mates_list.split(',') as List : params.input_pe_mates_list) : Channel.empty()
+    input_pe_rgs = params.input_pe_rgs_list ? Channel.fromList(params.input_pe_rgs_list.class == String ? params.input_pe_rgs_list.split(',') as List : params.input_pe_rgs_list) : Channel.empty()
+    input_se_reads = params.input_se_reads_list ? Channel.fromPath(params.input_se_reads_list.class == String ? params.input_se_reads_list.split(',') as List : params.input_se_reads_list) : Channel.empty()
+    input_se_rgs = params.input_se_rgs_list ? Channel.fromList(params.input_se_rgs_list.class == String ? params.input_se_rgs_list.split(',') as List : params.input_se_rgs_list) : Channel.empty()
     cram_reference = params.cram_reference ? Channel.fromPath(params.cram_reference).first() : Channel.value([])
     reference_tar = Channel.fromPath(params.reference_tar).first()
-    knownsites = params.knownsites ? Channel.fromPath(params.knownsites) : Channel.value([])
-    knownsites_indexes = params.knownsites_indexes ? Channel.fromPath(params.knownsites_indexes) : Channel.value([])
+    knownsites = params.knownsites ? Channel.fromPath(params.knownsites.class == String ? params.knownsites.split(',') as List : params.knownsites) : Channel.value([])
+    knownsites_indexes = params.knownsites_indexes ? Channel.fromPath(params.knownsites_indexes.class == String ? params.knownsites_indexes.split(',') as List : params.knownsites_indexes) : Channel.value([])
     coverage_intervallist = params.wgs_coverage_interval_list ? Channel.fromPath(params.wgs_coverage_interval_list).first() : Channel.value([])
     evaluation_intervallist = params.wgs_evaluation_interval_list ? Channel.fromPath(params.wgs_evaluation_interval_list).first() : Channel.value([])
     calling_intervallist = params.wgs_calling_interval_list ? Channel.fromPath(params.wgs_calling_interval_list).first() : Channel.value([])
@@ -90,14 +93,13 @@ workflow {
     sequence_intervals = PYTHON_CREATESEQUENCEGROUPS.out.intervals.flatten()
 
     // Assemble Paired and Single End FASTQs
-    pe_fastq = input_pe_rgs.merge(input_pe_reads, input_pe_mates).map { rg, read, mate -> [["rg_line": rg, "single_end": false], [read, mate]] }
-    se_fastq = input_se_rgs.merge(input_se_reads).map { rg, read -> [["rg_line": rg, "single_end": true], read] }
+    pe_fastq = input_pe_rgs.merge(input_pe_reads, input_pe_mates).map { rg, read, mate -> [["id": read.baseName, "rg_line": rg, "single_end": false, "interleaved": false], [read, mate]] }
+    se_fastq = input_se_rgs.merge(input_se_reads). map { rg, read -> [["id": read.baseName, "rg_line": rg, "single_end": true, "interleaved": false], read] }
 
     // Process the aligned reads
     SAMTOOLS_SPLIT(input_aligned_reads, cram_reference)
 
-    rg_bams = SAMTOOLS_SPLIT.out.rg_bams.transpose().map { meta, file -> [meta + ["rgbam": file.getBaseName(), "single_end": false], file] }
-
+    rg_bams = SAMTOOLS_SPLIT.out.rg_bams.transpose().map { meta, file -> [meta + ["id": file.baseName, "single_end": false, "interleaved": true], file] }
     SAMTOOLS_VIEW_RG(rg_bams.map{ meta, file -> [meta, file, []]}, Channel.value([[],[]]), Channel.value([]))
     // Each file should only have one RG. Use find to get the first @RG line from the header
     rg_lines = SAMTOOLS_VIEW_RG.out.sam.map{ meta, file -> [meta, file.readLines().find{ it.startsWith("@RG") }]}
@@ -111,16 +113,9 @@ workflow {
       CUTADAPT_PAIRED(pe_fastq)
       pe_fastq = CUTADAPT_PAIRED.out.reads
       // We want an single, interleaved output for our interleaved input. Output is controlled by meta.single_end so change it but keep the original value
-      CUTADAPT_INTERLEAVED(rg_fqs.map{ meta, file ->
-          meta.real_single_end = meta.single_end;
-          meta.single_end = true;
-          [meta, file]
-      })
+      CUTADAPT_INTERLEAVED(rg_fqs.map{ meta, file -> [meta + ["single_end": true], file] })
       // Return the original single_end value
-      rg_fqs = CUTADAPT.out.reads.concat(CUTADAPT_INTERLEAVED.out.reads.map { meta, file ->
-          meta.single_end = meta.real_single_end;
-          [meta - meta.subMap('real_single_end'), file]
-      })
+      rg_fqs = CUTADAPT_INTERLEAVED.out.reads.map { meta, file -> [meta + ["single_end": false], file] }
     }
 
     // Split large FASTQs; need to flatten paired files so splitFastq can process them
@@ -134,7 +129,7 @@ workflow {
         fq_to_align = fq_to_align.map { meta, file -> meta.rgline = meta.rgline.replaceFirst(/\tSM:\S+\t/, "\tSM:${params.biospecimen_name}\t"); [meta, file] }
     }
 
-    bwa_mem_payloads = fq_to_align.map { meta, file -> meta.id = meta.rgbam; [meta, file, meta.rgline.replaceAll("\t", "\\\\t"), true] }
+    bwa_mem_payloads = fq_to_align.map { meta, file -> [meta + ["id": file.baseName], file, meta.rgline.replaceAll("\t", "\\\\t"), meta.interleaved] }
     BWA_MEM(bwa_mem_payloads, indexed_fasta)
 
     bams_to_merge = BWA_MEM.out.aligned_bam.map { meta, file -> [["id": "temp.aligned.duplicates_marked.sorted"], file] }.groupTuple()
@@ -184,6 +179,12 @@ workflow {
     haplotyper_channel = PICARD_GATHERBAMFILES.out.merged_bam.combine(GATK4_INTERVALLISTTOOLS.out.interval_list.map{ _, files -> files }.flatten())
     haplotyper_channel = haplotyper_channel.map { meta, bam, bai, interval -> [["id": interval.parent.toString().split('/').last()], bam, bai, interval] }
     GATK4_HAPLOTYPECALLER(haplotyper_channel, ref_fasta, ref_fai, ref_dict, contamination)
-    PICARD_MERGEVCFS_RENAMESAMPLE(GATK4_HAPLOTYPECALLER.out.germline_vcf.map { meta, vcf, tbi -> [["id": "temp"], vcf, tbi] }.groupTuple(), params.biospecimen_name)
-    PICARD_COLLECTVARIANTCALLINGMETRICS(PICARD_MERGEVCFS_RENAMESAMPLE.out.merged_vcf, dbsnp_vcf, dbsnp_idx, evaluation_intervallist, ref_dict)
+    GATK4_MERGEVCFS(GATK4_HAPLOTYPECALLER.out.germline_vcf.map { meta, vcf, tbi -> [["id": "temp"], vcf] }.groupTuple(), Channel.value([[],[]]))
+    if (params.biospecimen_name) {
+        PICARD_RENAMESAMPLEINVCF(GATK4_MERGEVCFS.out.vcf.map { meta, file -> [["id": params.biospecimen_name], file] })
+        TABIX_TABIX_GVCF(PICARD_RENAMESAMPLEINVCF.out.vcf)
+        PICARD_COLLECTVARIANTCALLINGMETRICS(PICARD_RENAMESAMPLEINVCF.out.vcf.join(TABIX_TABIX_GVCF.out.tbi), dbsnp_vcf, dbsnp_idx, evaluation_intervallist, ref_dict)
+    } else {
+        PICARD_COLLECTVARIANTCALLINGMETRICS(GATK4_MERGEVCFS.out.vcf.join(GATK4_MERGEVCFS.out.tbi), dbsnp_vcf, dbsnp_idx, evaluation_intervallist, ref_dict)
+    }
 }

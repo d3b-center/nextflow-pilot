@@ -1,7 +1,7 @@
 {
     "$schema": "http://json-schema.org/draft-07/schema",
-    "$id": "https://raw.githubusercontent.com//home/ubuntu/volume/test_nextflow/kf_alignment_nf/master/nextflow_schema.json",
-    "title": "/home/ubuntu/volume/test_nextflow/kf_alignment_nf pipeline parameters",
+    "$id": "https://raw.githubusercontent.com//home/ubuntu/volume/test_nextflow/nextflow-pilot/master/nextflow_schema.json",
+    "title": "/home/ubuntu/volume/test_nextflow/nextflow-pilot pipeline parameters",
     "description": "",
     "type": "object",
     "definitions": {
@@ -10,7 +10,14 @@
             "type": "object",
             "fa_icon": "fas fa-terminal",
             "description": "Define where the pipeline should find input data and save output data.",
-            "properties": {}
+            "properties": {
+                "outdir": {
+                    "type": "string",
+                    "description": "Path to the output directory where the results will be saved.",
+                    "default": "./results",
+                    "fa_icon": "fas fa-folder-open"
+                }
+            }
         },
         "reference_genome_options": {
             "title": "Reference genome options",
@@ -33,7 +40,34 @@
             "fa_icon": "fab fa-acquisitions-incorporated",
             "description": "Set the top limit for requested resources for any single job.",
             "help_text": "If you are running on a smaller system, a pipeline step requesting more resources than are available may cause the Nextflow to stop the run with an error. These options allow you to cap the maximum resources requested by any single job so that the pipeline will run on your system.\n\nNote that you can not _increase_ the resources requested by any job using these options. For that you will need your own configuration file. See [the nf-core website](https://nf-co.re/usage/configuration) for details.",
-            "properties": {}
+            "properties": {
+                "max_cpus": {
+                    "type": "integer",
+                    "description": "Maximum number of CPUs that can be requested for any single job.",
+                    "default": 16,
+                    "fa_icon": "fas fa-microchip",
+                    "hidden": true,
+                    "help_text": "Use to set an upper-limit for the CPU requirement for each process. Should be an integer e.g. `--max_cpus 1`"
+                },
+                "max_memory": {
+                    "type": "string",
+                    "description": "Maximum amount of memory that can be requested for any single job.",
+                    "default": "128.GB",
+                    "fa_icon": "fas fa-memory",
+                    "pattern": "^\\d+(\\.\\d+)?\\.?\\s*(K|M|G|T)?B$",
+                    "hidden": true,
+                    "help_text": "Use to set an upper-limit for the memory requirement for each process. Should be a string in the format integer-unit e.g. `--max_memory '8.GB'`"
+                },
+                "max_time": {
+                    "type": "string",
+                    "description": "Maximum amount of time that can be requested for any single job.",
+                    "default": "240.h",
+                    "fa_icon": "far fa-clock",
+                    "pattern": "^(\\d+\\.?\\s*(s|m|h|day)\\s*)+$",
+                    "hidden": true,
+                    "help_text": "Use to set an upper-limit for the time requirement for each process. Should be a string in the format integer-unit e.g. `--max_time '2.h'`"
+                }
+            }
         },
         "generic_options": {
             "title": "Generic options",
@@ -62,16 +96,40 @@
         }
     ],
     "properties": {
-        "in": {
+        "input_bam_list": {
             "type": "string"
         },
-        "sample": {
+        "input_pe_reads_list": {
             "type": "string"
         },
-        "cram_fasta": {
+        "input_pe_mates_list": {
+            "type": "string"
+        },
+        "input_pe_rgs_list": {
+            "type": "string"
+        },
+        "input_se_reads_list": {
+            "type": "string"
+        },
+        "input_se_rgs_list": {
             "type": "string"
         },
         "reference_tar": {
+            "type": "string"
+        },
+        "cram_reference": {
+            "type": "string"
+        },
+        "biospecimen_name": {
+            "type": "string"
+        },
+        "output_basename": {
+            "type": "string"
+        },
+        "dbsnp_vcf": {
+            "type": "string"
+        },
+        "dbsnp_idx": {
             "type": "string"
         },
         "knownsites": {
@@ -80,31 +138,28 @@
         "knownsites_indexes": {
             "type": "string"
         },
-        "calling_intervallist": {
+        "contamination_sites_bed": {
             "type": "string"
         },
-        "coverage_intervallist": {
+        "contamination_sites_mu": {
             "type": "string"
         },
-        "evaluation_intervallist": {
+        "contamination_sites_ud": {
             "type": "string"
         },
-        "precalc_contam": {
+        "wgs_calling_interval_list": {
             "type": "string"
         },
-        "contamination_bed": {
+        "wgs_coverage_interval_list": {
             "type": "string"
         },
-        "contamination_mu": {
+        "wgs_evaluation_interval_list": {
             "type": "string"
         },
-        "contamination_ud": {
+        "wxs_bait_interval_list": {
             "type": "string"
         },
-        "dbsnp_vcf": {
-            "type": "string"
-        },
-        "dbsnp_vcf_index": {
+        "wxs_target_interval_list": {
             "type": "string"
         },
         "cutadapt_r1_adapter": {
@@ -122,22 +177,19 @@
         "cutadapt_quality_cutoff": {
             "type": "string"
         },
+        "min_alignment_score": {
+            "type": "string"
+        },
+        "precalculated_contamination": {
+            "type": "string"
+        },
         "wgs_or_wxs": {
             "type": "string"
         },
-        "outdir": {
+        "test_aws": {
             "type": "string"
         },
-        "output_basename": {
-            "type": "string"
-        },
-        "max_memory": {
-            "type": "string"
-        },
-        "max_time": {
-            "type": "string"
-        },
-        "max_cpus": {
+        "test_batch": {
             "type": "string"
         }
     }
