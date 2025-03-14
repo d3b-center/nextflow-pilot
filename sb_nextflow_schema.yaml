@@ -244,16 +244,6 @@ inputs:
     - 'null'
     - File
 outputs:
--   doc: This is a template output. You can modify the glob pattern to make outputs
-        more specific.
-    id: nf_publishdir
-    label: Publish Directory
-    outputBinding:
-        glob: '*'
-    type:
-    - 'null'
-    -   items: File
-        type: array
 -   id: alignment_metrics
     outputBinding:
       glob: '**/metrics/*.alignment_summary_metrics'
@@ -264,101 +254,101 @@ outputs:
     type: File?
 -   id: artifact_bait_bias_summary_metrics
     outputBinding:
-      glob: $(inputs.outdir)/metrics/*.artifact_metrics.bait_bias_summary_metrics
+      glob: '**/metrics/*.artifact_metrics.bait_bias_summary_metrics'
     type: File?
 -   id: artifact_error_summary_metrics
     outputBinding:
-      glob: $(inputs.outdir)/metrics/*.artifact_metrics.error_summary_metrics
+      glob: '**/metrics/*.artifact_metrics.error_summary_metrics'
     type: File?
 -   id: artifact_pre_adapter_detail_metrics
     outputBinding:
-      glob: $(inputs.outdir)/metrics/*.artifact_metrics.pre_adapter_detail_metrics
+      glob: '**/metrics/*.artifact_metrics.pre_adapter_detail_metrics'
     type: File?
 -   id: artifact_pre_adapter_summary_metrics
     outputBinding:
-      glob: $(inputs.outdir)/metrics/*.artifact_metrics.pre_adapter_summary_metrics
+      glob: '**/metrics/*.artifact_metrics.pre_adapter_summary_metrics'
     type: File?
 -   id: bqsr_report
     outputBinding:
-      glob: $(inputs.outdir)/*.GatherBqsrReports.recal_data.csv
+      glob: '**/metrics/*.GatherBqsrReports.recal_data.csv'
     type: File
 -   id: cram
     outputBinding:
-      glob: $(inputs.outdir)/*.cram
+      glob: '**/*.cram'
     secondaryFiles:
     - pattern: .crai
       required: true
     type: File
 -   id: cutadapt_stats
     outputBinding:
-      glob: $(inputs.outdir)/metrics/*cutadapt_stats.txt
+      glob: '**/metrics/*cutadapt_stats.txt'
     type: File[]?
 -   id: gc_bias_chart
     outputBinding:
-      glob: $(inputs.outdir)/metrics/*.gc_bias_metrics.pdf
+      glob: '**/metrics/*.gc_bias_metrics.pdf'
     type: File?
 -   id: gc_bias_detail
     outputBinding:
-      glob: $(inputs.outdir)/metrics/*.gc_bias_metrics.txt
+      glob: '**/metrics/*.gc_bias_metrics.txt'
     type: File?
 -   id: gc_bias_summary
     outputBinding:
-      glob: $(inputs.outdir)/metrics/*.gc_bias_summary_metrics.txt
+      glob: '**/metrics/*.gc_bias_summary_metrics.txt'
     type: File?
 -   id: gvcf
     outputBinding:
-      glob: $(inputs.outdir)/*.g.vcf.gz
+      glob: '**/*.g.vcf.gz'
     secondaryFiles:
     - pattern: .tbi
       required: true
     type: File?
 -   id: gvcf_calling_metrics
     outputBinding:
-      glob: $(inputs.outdir)/metrics/*.variant_calling_*_metrics
+      glob: '**/metrics/*.variant_calling_*_metrics'
     type: File[]?
 -   id: hs_metrics
     outputBinding:
-      glob: $(inputs.outdir)/metrics/*.hs_metrics
+      glob: '**/metrics/*.hs_metrics'
     type: File?
 -   id: idxstats
     outputBinding:
-      glob: $(inputs.outdir)/metrics/*.idxstats.txt
+      glob: '**/metrics/*.idxstats.txt'
     type: File?
 -   id: insert_metrics
     outputBinding:
-      glob: $(inputs.outdir)/metrics/*.insert_size_metrics
+      glob: '**/metrics/*.insert_size_metrics'
     type: File?
 -   id: insert_plot
     outputBinding:
-      glob: $(inputs.outdir)/metrics/*.insert_size_Histogram.pdf
+      glob: '**/metrics/*.insert_size_Histogram.pdf'
     type: File?
 -   id: qual_chart
     outputBinding:
-      glob: $(inputs.outdir)/metrics/*.qual_score_dist.pdf
+      glob: '**/metrics/*.qual_score_dist.pdf'
     type: File?
 -   id: qual_metrics
     outputBinding:
-      glob: $(inputs.outdir)/metrics/*.qual_score_dist.txt
+      glob: '**/metrics/*.qual_score_dist.txt'
     type: File?
 -   id: verifybamid_output
     outputBinding:
-      glob: $(inputs.outdir)/metrics/*.selfSM
+      glob: '**/metrics/*.selfSM'
     type: File?
 -   id: wgs_metrics
     outputBinding:
-      glob: $(inputs.outdir)/metrics/*.wgs_metrics
+      glob: '**/metrics/*.wgs_metrics'
     type: File?
 -   id: xy_ratio
     outputBinding:
-      glob: $(inputs.outdir)/metrics/*.ratio.txt
+      glob: '**/metrics/*.ratio.txt'
     type: File
 -   id: execution_report
     outputBinding:
-      glob: $(inputs.outdir)/pipeline_info/execution_report_*
+      glob: '**/pipeline_info/execution_report_*'
     type: File
 -   id: execution_timeline
     outputBinding:
-      glob: $(inputs.outdir)/pipeline_info/execution_timeline_*
+      glob: '**/pipeline_info/execution_timeline_*'
     type: File
 requirements:
 -   class: InlineJavascriptRequirement
