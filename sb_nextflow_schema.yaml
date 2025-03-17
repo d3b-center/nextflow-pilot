@@ -2,6 +2,11 @@ app_content:
     entrypoint: main.nf
 class: nextflow
 cwlVersion: None
+requirements:
+-   class: InlineJavascriptRequirement
+hints:
+-   class: sbg:NextflowExecutionMode
+    value: multi-instance
 inputs:
 -   id: input_bam_list
     inputBinding:
@@ -126,6 +131,20 @@ inputs:
     inputBinding:
         prefix: --wxs_target_interval_list
     type: File?
+-   id: hla_dna_ref_seqs
+    inputBinding:
+        prefix: --hla_dna_ref_seqs
+    type: File?
+    sbg:suggestedValue: {class: File, path: 6669ac8127374715fc3ba3c4, name: hla_v3.43.0_gencode_v39_dna_seq.fa}
+-   id: hla_dna_gene_coords
+    inputBinding:
+        prefix: --hla_dna_gene_coords
+    sbg:suggestedValue: {class: File, path: 6669ac8127374715fc3ba3c2, name: hla_v3.43.0_gencode_v39_dna_coord.fa}
+    type: File?
+-   id: t1k_abnormal_unmap_flag
+    inputBinding:
+        prefix: --t1k_abnormal_unmap_flag
+    type: boolean?
 -   id: cutadapt_r1_adapter
     inputBinding:
         prefix: --cutadapt_r1_adapter
@@ -154,6 +173,36 @@ inputs:
     inputBinding:
         prefix: --precalculated_contamination
     type: float?
+-   id: run_hs_metrics
+    inputBinding:
+        prefix: --run_hs_metrics
+    sbg:toolDefaultValue: 'true'
+    type: boolean?
+-   id: run_wgs_metrics
+    inputBinding:
+        prefix: --run_wgs_metrics
+    sbg:toolDefaultValue: 'true'
+    type: boolean?
+-   id: run_agg_metrics
+    inputBinding:
+        prefix: --run_agg_metrics
+    sbg:toolDefaultValue: 'true'
+    type: boolean?
+-   id: run_sex_metrics
+    inputBinding:
+        prefix: --run_sex_metrics
+    sbg:toolDefaultValue: 'true'
+    type: boolean?
+-   id: run_gvcf_processing
+    inputBinding:
+        prefix: --run_gvcf_processing
+    sbg:toolDefaultValue: 'true'
+    type: boolean?
+-   id: run_t1k
+    inputBinding:
+        prefix: --run_t1k
+    sbg:toolDefaultValue: 'true'
+    type: boolean?
 -   id: wgs_or_wxs
     inputBinding:
         prefix: --wgs_or_wxs
@@ -350,8 +399,3 @@ outputs:
     outputBinding:
       glob: '**/pipeline_info/execution_timeline_*'
     type: File
-requirements:
--   class: InlineJavascriptRequirement
-hints:
--   class: sbg:NextflowExecutionMode
-    value: multi-instance

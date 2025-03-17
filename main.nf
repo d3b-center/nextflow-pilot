@@ -161,17 +161,14 @@ workflow {
     xy_ratios = xy_info.map{ xreads, xrat, yreads, yrat -> ["Y_reads_fraction " + yreads/(xreads + yreads), "X:Y_ratio " + xrat/yrat, "X_norm_reads $xrat", "Y_norm_reads $yrat", "Y_norm_reads_fraction " + yrat/(xrat+yrat)]}
     xy_ratios.flatten().collectFile(name: "${params.output_basename}.ratio.txt", storeDir: "${params.outdir}/metrics/", newLine: true)
 
-    if (params.wgs_or_wxs == "WXS") {
-      PICARD_COLLECTHSMETRICS(PICARD_GATHERBAMFILES.out.merged_bam, ref_fasta, ref_fai, bait_intervallist, target_intervallist)
-    } else {
-      PICARD_COLLECTWGSMETRICS(PICARD_GATHERBAMFILES.out.merged_bam, ref_fasta, ref_fai, coverage_intervallist)
-    }
+    PICARD_COLLECTHSMETRICS(PICARD_GATHERBAMFILES.out.merged_bam, ref_fasta, ref_fai, bait_intervallist, target_intervallist)
+    PICARD_COLLECTWGSMETRICS(PICARD_GATHERBAMFILES.out.merged_bam, ref_fasta, ref_fai, coverage_intervallist)
 
     if (params.precalculated_contamination) {
       contamination = Channel.value(params.precalculated_contamination)
     } else {
       VERIFYBAMID_VERIFYBAMID2(PICARD_GATHERBAMFILES.out.merged_bam, svds, Channel.value([]), ref_fasta)
-      contamination = VERIFYBAMID_VERIFYBAMID2.out.self_sm.map { meta, tsv -> tsv }.splitCsv(header: true, sep: '\t').filter { row -> row.'FREEMIX(alpha)' != null }.first().'FREEMIX(alpha)'.toFloat() / 0.75
+      contamination = VERIFYBAMID_VERIFYBAMID2.out.self_sm.map { meta, tsv -> tsv }.splitCsv(header: true, sep: '\t').filter { row -> row.'FREEMIX(alpha)' != null }.first().map { v -> v.'FREEMIX(alpha)'.toFloat() / 0.75 }
     }
 
     GATK4_INTERVALLISTTOOLS(calling_intervallist.map{ file -> [["id":"wgs_calling"], file]})

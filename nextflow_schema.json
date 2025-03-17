@@ -162,6 +162,15 @@
         "wxs_target_interval_list": {
             "type": "string"
         },
+        "hla_dna_ref_seqs": {
+            "type": "string"
+        },
+        "hla_dna_gene_coords": {
+            "type": "string"
+        },
+        "t1k_abnormal_unmap_flag": {
+            "type": "string"
+        },
         "cutadapt_r1_adapter": {
             "type": "string"
         },
@@ -183,6 +192,30 @@
         "precalculated_contamination": {
             "type": "string"
         },
+        "run_hs_metrics": {
+            "type": "string",
+            "default": "true"
+        },
+        "run_wgs_metrics": {
+            "type": "string",
+            "default": "true"
+        },
+        "run_agg_metrics": {
+            "type": "string",
+            "default": "true"
+        },
+        "run_sex_metrics": {
+            "type": "string",
+            "default": "true"
+        },
+        "run_gvcf_processing": {
+            "type": "string",
+            "default": "true"
+        },
+        "run_t1k": {
+            "type": "string",
+            "default": "true"
+        },
         "wgs_or_wxs": {
             "type": "string"
         },
@@ -190,6 +223,9 @@
             "type": "string"
         },
         "test_batch": {
+            "type": "string"
+        },
+        "test_cavatica": {
             "type": "string"
         }
     }
