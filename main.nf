@@ -24,6 +24,7 @@ include { PICARD_QUALITYSCOREDISTRIBUTION } from './modules/local/picard/quality
 include { PICARD_COLLECTWGSMETRICS } from './modules/local/picard/collectwgsmetrics/main'
 include { PICARD_COLLECTHSMETRICS } from './modules/local/picard/collecthsmetrics/main'
 include { SAMTOOLS_IDXSTATS } from './modules/nf-core/samtools/idxstats/main'
+include { SAMTOOLS_IDXSTATS_XY } from './modules/local/samtools/idxstats_xy/main'
 include { SAMTOOLS_VIEW as SAMTOOLS_VIEW_CRAM } from './modules/nf-core/samtools/view/main'
 include { VERIFYBAMID_VERIFYBAMID2 } from './modules/nf-core/verifybamid/verifybamid2/main'
 include { GATK4_INTERVALLISTTOOLS } from './modules/nf-core/gatk4/intervallisttools/main'
@@ -95,21 +96,20 @@ workflow {
     PYTHON_CREATESEQUENCEGROUPS(ref_dict)
     sequence_intervals = PYTHON_CREATESEQUENCEGROUPS.out.intervals.flatten()
 
-    se_fastq = input_se_rgs.merge(input_se_reads). map { rg, read -> [["id": read.baseName, "rgline": rg, "single_end": true, "interleaved": false], read] }.branch{ ch ->
+    // Prepare Reads for BWA
+    se_fastq = input_se_rgs.merge(input_se_reads). map { rg, read -> [["id": rg.replaceAll('\\\\t','\t').split('\t').find{ it.startsWith('ID') }.replaceFirst('ID:', ""), "rgline": rg, "single_end": true, "interleaved": false], read] }.branch{ ch ->
         trim: (params.cutadapt_r1_adapter || params.cutadapt_quality_base || params.cutadapt_quality_cutoff)
         pass: true
     }
-
     CUTADAPT_SINGLE(se_fastq.trim)
 
-    pe_fastq = input_pe_rgs.merge(input_pe_reads, input_pe_mates).map { rg, read, mate -> [["id": read.simpleName, "rgline": rg, "single_end": false, "interleaved": false], [read, mate]] }
+    pe_fastq = input_pe_rgs.merge(input_pe_reads, input_pe_mates).map { rg, read, mate -> [["id": rg.replaceAll('\\\\t','\t').split('\t').find{ it.startsWith('ID') }.replaceFirst('ID:', ""), "rgline": rg, "single_end": false, "interleaved": false], [read, mate]] }
     pe_fastq = pe_fastq.branch { meta, files ->
         trim: (params.cutadapt_r1_adapter || params.cutadapt_r2_adapter || params.cutadapt_quality_base || params.cutadapt_quality_cutoff)
         pass: true
     }
     CUTADAPT_INTERLEAVE_PEFQ(pe_fastq.pass.map{ meta, files -> [meta + ["single_end": true, "interleaved": true], files] })
 
-    // Process the aligned reads
     SAMTOOLS_SPLIT(input_aligned_reads, cram_reference)
 
     rg_bams = SAMTOOLS_SPLIT.out.rg_bams.transpose().map { meta, file -> [meta + ["id": file.baseName, "single_end": false, "interleaved": true], file] }
@@ -173,11 +173,13 @@ workflow {
     PICARD_COLLECTSEQUENCINGARTIFACTMETRICS(PICARD_GATHERBAMFILES.out.merged_bam, ref_fasta, ref_fai)
     PICARD_QUALITYSCOREDISTRIBUTION(PICARD_GATHERBAMFILES.out.merged_bam, ref_fasta, ref_fai)
 
-    SAMTOOLS_IDXSTATS(PICARD_GATHERBAMFILES.out.merged_bam)
-    idxstats_rows = SAMTOOLS_IDXSTATS.out.idxstats.map{ _, file -> file }.splitCsv(sep: '\t', header: ['seqName', 'seqLen', 'readsMapped', 'readsUnmapped'])
-    xy_info = idxstats_rows.filter{ row -> row.seqName == 'chrX' || row.seqName == 'chrY' }.map{ row -> [row.readsMapped.toInteger(), row.readsMapped.toInteger() / row.seqLen.toInteger()] }.collect()
-    xy_ratios = xy_info.map{ xreads, xrat, yreads, yrat -> ["Y_reads_fraction " + yreads/(xreads + yreads), "X:Y_ratio " + xrat/yrat, "X_norm_reads $xrat", "Y_norm_reads $yrat", "Y_norm_reads_fraction " + yrat/(xrat+yrat)]}
-    xy_ratios.flatten().collectFile(name: "${params.output_basename}.ratio.txt", storeDir: "${params.outdir}/metrics/", newLine: true)
+    SAMTOOLS_IDXSTATS_XY(PICARD_GATHERBAMFILES.out.merged_bam)
+    // The below approach works on local but not CAVATICA
+    // SAMTOOLS_IDXSTATS(PICARD_GATHERBAMFILES.out.merged_bam)
+    // idxstats_rows = SAMTOOLS_IDXSTATS.out.idxstats.map{ _, file -> file }.splitCsv(sep: '\t', header: ['seqName', 'seqLen', 'readsMapped', 'readsUnmapped'])
+    // xy_info = idxstats_rows.filter{ row -> row.seqName == 'chrX' || row.seqName == 'chrY' }.map{ row -> [row.readsMapped.toInteger(), row.readsMapped.toInteger() / row.seqLen.toInteger()] }.collect()
+    // xy_ratios = xy_info.map{ xreads, xrat, yreads, yrat -> ["Y_reads_fraction " + yreads/(xreads + yreads), "X:Y_ratio " + xrat/yrat, "X_norm_reads $xrat", "Y_norm_reads $yrat", "Y_norm_reads_fraction " + yrat/(xrat+yrat)]}
+    // xy_ratios.flatten().collectFile(name: "${params.output_basename}.ratio.txt", storeDir: "${params.outdir}/metrics/", newLine: true)
 
     PICARD_COLLECTHSMETRICS(PICARD_GATHERBAMFILES.out.merged_bam, ref_fasta, ref_fai, bait_intervallist, target_intervallist)
     PICARD_COLLECTWGSMETRICS(PICARD_GATHERBAMFILES.out.merged_bam, ref_fasta, ref_fai, coverage_intervallist)

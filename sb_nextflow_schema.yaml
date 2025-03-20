@@ -19,7 +19,7 @@ arguments:
 -   position: 0
     shellQuote: false
     valueFrom: >
-        -params-file input_params.json
+        -params-file input_params.json --outdir results
 inputs:
 -   id: input_bam_list
     inputBinding:
@@ -267,14 +267,6 @@ inputs:
         prefix: --test_cavatica
     type: boolean?
     default: true
--   id: outdir
-    inputBinding:
-        prefix: --outdir
-    label: Path to the output directory where the results will be saved.
-    sbg:category: Input/output options
-    sbg:icon: fas fa-folder-open
-    sbg:toolDefaultValue: ./results
-    type: string
 -   doc: Use to set an upper-limit for the CPU requirement for each process. Should
         be an integer e.g. `--max_cpus 1`
     id: max_cpus
@@ -284,7 +276,7 @@ inputs:
     sbg:category: Max job request options
     sbg:hidden: true
     sbg:icon: fas fa-microchip
-    sbg:toolDefaultValue: 16
+    sbg:toolDefaultValue: 36
     type:
     - 'null'
     - int
@@ -316,23 +308,6 @@ inputs:
     type:
     - 'null'
     - string
--   doc: List of files not added as explicit workflow inputs but required for workflow
-        execution.
-    id: auxiliary_files
-    label: Auxiliary files
-    type:
-    - 'null'
-    -   items: File
-        type: array
--   doc: Provide parameters through a JSON format input file.
-    id: params_file
-    inputBinding:
-        prefix: -params-file
-    label: Params files
-    sbg:fileTypes: JSON
-    type:
-    - 'null'
-    - File
 outputs:
 -   id: alignment_metrics
     outputBinding:
@@ -371,7 +346,7 @@ outputs:
     type: File
 -   id: cutadapt_stats
     outputBinding:
-      glob: '**/metrics/*cutadapt_stats.txt'
+      glob: '**/cutadapt/*.cutadapt_stats.txt'
     type: File[]?
 -   id: gc_bias_chart
     outputBinding:

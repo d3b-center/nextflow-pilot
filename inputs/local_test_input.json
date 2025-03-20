@@ -12,6 +12,8 @@
   "wgs_calling_interval_list": "/home/ubuntu/volume/test_nextflow/wgs_calling_regions.hg38.interval_list",
   "wgs_coverage_interval_list": "/home/ubuntu/volume/test_nextflow/wgs_coverage_regions.hg38.interval_list",
   "wgs_evaluation_interval_list": "/home/ubuntu/volume/test_nextflow/wgs_evaluation_regions.hg38.interval_list",
+  "cutadapt_r1_adapter": "AGATCGGAAGAG",
+  "cutadapt_r2_adapter": "AGATCGGAAGAG",
   "run_hs_metrics": false,
   "run_wgs_metrics": false,
   "run_agg_metrics": false,
