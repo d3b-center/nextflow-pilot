@@ -5,9 +5,10 @@ include { UNTAR } from './modules/nf-core/untar/main'
 include { SAMTOOLS_SPLIT } from './modules/local/samtools/split/main'
 include { SAMTOOLS_VIEW as SAMTOOLS_VIEW_RG } from './modules/nf-core/samtools/view/main'
 include { BIOBAMBAM_BAMTOFASTQ } from './modules/local/biobambam/bamtofastq/main'
+include { CUTADAPT as CUTADAPT_INTERLEAVE_PEFQ  } from './modules/nf-core/cutadapt/main'
 include { CUTADAPT as CUTADAPT_SINGLE } from './modules/nf-core/cutadapt/main'
 include { CUTADAPT as CUTADAPT_PAIRED } from './modules/nf-core/cutadapt/main'
-include { CUTADAPT as CUTADAPT_INTERLEAVED } from './modules/nf-core/cutadapt/main'
+include { SPLIT_FASTQ } from './modules/local/split/fastq/main'
 include { BWA_MEM } from './modules/local/bwa/mem/main'
 include { SAMBAMBA_MERGE } from './modules/local/sambamba/merge/main'
 include { PYTHON_CREATESEQUENCEGROUPS } from './modules/local/python/createsequencegroups/main'
@@ -39,8 +40,10 @@ workflow {
     input_pe_reads = params.input_pe_reads_list ? Channel.fromPath(params.input_pe_reads_list.class == String ? params.input_pe_reads_list.split(',') as List : params.input_pe_reads_list) : Channel.empty()
     input_pe_mates = params.input_pe_mates_list ? Channel.fromPath(params.input_pe_mates_list.class == String ? params.input_pe_mates_list.split(',') as List : params.input_pe_mates_list) : Channel.empty()
     input_pe_rgs = params.input_pe_rgs_list ? Channel.fromList(params.input_pe_rgs_list.class == String ? params.input_pe_rgs_list.split(',') as List : params.input_pe_rgs_list) : Channel.empty()
+    input_pe_rgs.view{ "INPUT PE RG: $it" }
     input_se_reads = params.input_se_reads_list ? Channel.fromPath(params.input_se_reads_list.class == String ? params.input_se_reads_list.split(',') as List : params.input_se_reads_list) : Channel.empty()
     input_se_rgs = params.input_se_rgs_list ? Channel.fromList(params.input_se_rgs_list.class == String ? params.input_se_rgs_list.split(',') as List : params.input_se_rgs_list) : Channel.empty()
+    input_se_rgs.view{ "INPUT SE RG: $it" }
     cram_reference = params.cram_reference ? Channel.fromPath(params.cram_reference).first() : Channel.value([])
     reference_tar = Channel.fromPath(params.reference_tar).first()
     knownsites = params.knownsites ? Channel.fromPath(params.knownsites.class == String ? params.knownsites.split(',') as List : params.knownsites) : Channel.value([])
@@ -92,9 +95,19 @@ workflow {
     PYTHON_CREATESEQUENCEGROUPS(ref_dict)
     sequence_intervals = PYTHON_CREATESEQUENCEGROUPS.out.intervals.flatten()
 
-    // Assemble Paired and Single End FASTQs
-    pe_fastq = input_pe_rgs.merge(input_pe_reads, input_pe_mates).map { rg, read, mate -> [["id": read.baseName, "rg_line": rg, "single_end": false, "interleaved": false], [read, mate]] }
-    se_fastq = input_se_rgs.merge(input_se_reads). map { rg, read -> [["id": read.baseName, "rg_line": rg, "single_end": true, "interleaved": false], read] }
+    se_fastq = input_se_rgs.merge(input_se_reads). map { rg, read -> [["id": read.baseName, "rgline": rg, "single_end": true, "interleaved": false], read] }.branch{ ch ->
+        trim: (params.cutadapt_r1_adapter || params.cutadapt_quality_base || params.cutadapt_quality_cutoff)
+        pass: true
+    }
+
+    CUTADAPT_SINGLE(se_fastq.trim)
+
+    pe_fastq = input_pe_rgs.merge(input_pe_reads, input_pe_mates).map { rg, read, mate -> [["id": read.simpleName, "rgline": rg, "single_end": false, "interleaved": false], [read, mate]] }
+    pe_fastq = pe_fastq.branch { meta, files ->
+        trim: (params.cutadapt_r1_adapter || params.cutadapt_r2_adapter || params.cutadapt_quality_base || params.cutadapt_quality_cutoff)
+        pass: true
+    }
+    CUTADAPT_INTERLEAVE_PEFQ(pe_fastq.pass.map{ meta, files -> [meta + ["single_end": true, "interleaved": true], files] })
 
     // Process the aligned reads
     SAMTOOLS_SPLIT(input_aligned_reads, cram_reference)
@@ -105,31 +118,36 @@ workflow {
     rg_lines = SAMTOOLS_VIEW_RG.out.sam.map{ meta, file -> [meta, file.readLines().find{ it.startsWith("@RG") }]}
 
     BIOBAMBAM_BAMTOFASTQ(rg_bams, cram_reference)
-    rg_fqs = BIOBAMBAM_BAMTOFASTQ.out.fastq
-
-    if (params.cutadapt_r1_adapter || params.cutadapt_r2_adapter || params.cutadapt_min_len || params.cutadapt_quality_base || params.cutadapt_quality_cutoff) {
-      CUTADAPT_SINGLE(se_fastq)
-      se_fastq = CUTADAPT_SINGLE.out.reads
-      CUTADAPT_PAIRED(pe_fastq)
-      pe_fastq = CUTADAPT_PAIRED.out.reads
-      // We want an single, interleaved output for our interleaved input. Output is controlled by meta.single_end so change it but keep the original value
-      CUTADAPT_INTERLEAVED(rg_fqs.map{ meta, file -> [meta + ["single_end": true], file] })
-      // Return the original single_end value
-      rg_fqs = CUTADAPT_INTERLEAVED.out.reads.map { meta, file -> [meta + ["single_end": false], file] }
+    rg_fqs = BIOBAMBAM_BAMTOFASTQ.out.fastq.join(rg_lines).map{ meta, file, rgtxt -> [meta + ["rgline": rgtxt], file] }.branch{ ch ->
+        trim: (params.cutadapt_r1_adapter || params.cutadapt_r2_adapter || params.cutadapt_quality_base || params.cutadapt_quality_cutoff)
+        pass: true
     }
 
-    // Split large FASTQs; need to flatten paired files so splitFastq can process them
-    split_rg_fqs = rg_fqs.join(rg_lines).map { meta, fastq, rgtxt -> [meta + ["rgline": rgtxt], fastq] }.splitFastq(by: 170_000_000, elem: -1, file: true)
-    split_se_fqs = se_fastq.splitFastq(by: 170_000_000, elem: -1, file: true)
-    split_pe_fqs = pe_fastq.map{ v -> v.flatten() }.splitFastq(by: 170_000_000, pe: true, file: true)
+    CUTADAPT_PAIRED(pe_fastq.trim.concat(rg_fqs.trim).map{ meta , files -> [meta + ["single_end": true], files] })
 
-    fq_to_align = split_rg_fqs.mix(split_se_fqs, split_pe_fqs)
+    fastq_channel = Channel.empty()
+    fastq_channel = fastq_channel.mix(se_fastq.pass)
+    fastq_channel = fastq_channel.mix(rg_fqs.pass)
+    fastq_channel = fastq_channel.mix(CUTADAPT_SINGLE.out.reads)
+    fastq_channel = fastq_channel.mix(CUTADAPT_INTERLEAVE_PEFQ.out.reads.map{ meta, file -> [meta + ["single_end": false], file] })
+    fastq_channel = fastq_channel.mix(CUTADAPT_PAIRED.out.reads.map{ meta, file -> [meta + ["single_end": false], file] })
+
+    fastq_channel = fastq_channel.branch{ meta, file ->
+        split: file.size() > 10000000000
+        pass: true
+    }
+
+    SPLIT_FASTQ(fastq_channel.split.map{ meta, reads -> [meta, reads, []]})
+
+    fq_align_channel = Channel.empty()
+    fq_align_channel = fq_align_channel.mix(fastq_channel.pass)
+    fq_align_channel = fq_align_channel.mix(SPLIT_FASTQ.out.split_reads.transpose())
 
     if (params.biospecimen_name) {
-        fq_to_align = fq_to_align.map { meta, file -> meta.rgline = meta.rgline.replaceFirst(/\tSM:\S+\t/, "\tSM:${params.biospecimen_name}\t"); [meta, file] }
+        fq_align_channel = fq_align_channel.map { meta, file -> [meta + ["rgline": meta.rgline.replaceFirst(/\tSM:\S+\t/, "\tSM:${params.biospecimen_name}\t")], file] }
     }
 
-    bwa_mem_payloads = fq_to_align.map { meta, file -> [meta + ["id": file.baseName], file, meta.rgline.replaceAll("\t", "\\\\t"), meta.interleaved] }
+    bwa_mem_payloads = fq_align_channel.map { meta, file -> [meta + ["id": file.baseName], file, meta.rgline.replaceAll("\t", "\\\\t"), meta.interleaved] }
     BWA_MEM(bwa_mem_payloads, indexed_fasta)
 
     bams_to_merge = BWA_MEM.out.aligned_bam.map { meta, file -> [["id": "temp.aligned.duplicates_marked.sorted"], file] }.groupTuple()

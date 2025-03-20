@@ -4,9 +4,22 @@ class: nextflow
 cwlVersion: None
 requirements:
 -   class: InlineJavascriptRequirement
+-   class: ShellCommandRequirement
+-   class: InitialWorkDirRequirement
+    listing:
+    - entryname: input_params.json
+      entry: |
+          $(JSON.stringify({input_se_rgs_list: inputs.input_se_rgs_list ? inputs.input_se_rgs_list : "", input_pe_rgs_list: inputs.input_pe_rgs_list ? inputs.input_pe_rgs_list : ""}))
 hints:
 -   class: sbg:NextflowExecutionMode
     value: multi-instance
+-   class: sbg:SaveLogs
+    value: input_params.json
+arguments:
+-   position: 0
+    shellQuote: false
+    valueFrom: >
+        -params-file input_params.json
 inputs:
 -   id: input_bam_list
     inputBinding:
@@ -27,10 +40,6 @@ inputs:
         prefix: --input_pe_mates_list
     type: File[]?
 -   id: input_pe_rgs_list
-    inputBinding:
-        shellQuote: false
-        itemSeparator: ','
-        prefix: --input_pe_rgs_list
     type: string[]?
 -   id: input_se_reads_list
     inputBinding:
@@ -39,10 +48,6 @@ inputs:
         prefix: --input_se_reads_list
     type: File[]?
 -   id: input_se_rgs_list
-    inputBinding:
-        shellQuote: false
-        itemSeparator: ','
-        prefix: --input_se_rgs_list
     type: string[]?
 -   id: reference_tar
     inputBinding:
@@ -177,32 +182,68 @@ inputs:
     inputBinding:
         prefix: --run_hs_metrics
     sbg:toolDefaultValue: 'true'
-    type: boolean?
+    type:
+    - 'null'
+    - name: run_hs_metrics
+      symbols:
+      - true
+      - false
+      type: enum
 -   id: run_wgs_metrics
     inputBinding:
         prefix: --run_wgs_metrics
     sbg:toolDefaultValue: 'true'
-    type: boolean?
+    type:
+    - 'null'
+    - name: run_wgs_metrics
+      symbols:
+      - true
+      - false
+      type: enum
 -   id: run_agg_metrics
     inputBinding:
         prefix: --run_agg_metrics
     sbg:toolDefaultValue: 'true'
-    type: boolean?
+    type:
+    - 'null'
+    - name: run_agg_metrics
+      symbols:
+      - true
+      - false
+      type: enum
 -   id: run_sex_metrics
     inputBinding:
         prefix: --run_sex_metrics
     sbg:toolDefaultValue: 'true'
-    type: boolean?
+    type:
+    - 'null'
+    - name: run_sex_metrics
+      symbols:
+      - true
+      - false
+      type: enum
 -   id: run_gvcf_processing
     inputBinding:
         prefix: --run_gvcf_processing
     sbg:toolDefaultValue: 'true'
-    type: boolean?
+    type:
+    - 'null'
+    - name: run_gvcf_processing
+      symbols:
+      - true
+      - false
+      type: enum
 -   id: run_t1k
     inputBinding:
         prefix: --run_t1k
     sbg:toolDefaultValue: 'true'
-    type: boolean?
+    type:
+    - 'null'
+    - name: run_t1k
+      symbols:
+      - true
+      - false
+      type: enum
 -   id: wgs_or_wxs
     inputBinding:
         prefix: --wgs_or_wxs

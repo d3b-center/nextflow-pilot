@@ -16,7 +16,7 @@
   "run_wgs_metrics": false,
   "run_agg_metrics": false,
   "run_sex_metrics": false,
-  "run_gvcf_processing" : true,
+  "run_gvcf_processing" : false,
   "wgs_or_wxs": "WGS",
   "outdir": "test_output",
   "test_aws": false,
