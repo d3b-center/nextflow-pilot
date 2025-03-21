@@ -1,5 +1,5 @@
 {
-  "input_bam_list": ["/home/ubuntu/volume/test_nextflow/NA12878.bam"],
+  "input_bam_list": ["/home/ubuntu/volume/test_nextflow/917729066c3b408d8c1f148722e0041f.10pct.bam"],
   "reference_tar": "/home/ubuntu/volume/Ref/Homo_sapiens_assembly38.tgz",
   "output_basename": "NA12878-kf-alignment-nf-test-local",
   "dbsnp_vcf": "/home/ubuntu/volume/test_nextflow/Homo_sapiens_assembly38.dbsnp138.vcf",

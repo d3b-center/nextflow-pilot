@@ -5,11 +5,10 @@ process SPLIT_FASTQ {
     container 'ubuntu:20.04'
 
     input:
-    tuple val(meta), path(reads), path(mates)
+    tuple val(meta), path(reads)
 
     output:
-    tuple val(meta), path("${reads.simpleName}*"), emit: split_reads
-    tuple val(meta), path("${mates.simpleName}*"), optional: true, emit: split_mates
+    tuple val(meta), path("*.fastq"), emit: split_reads
 
     when:
     task.ext.when == null || task.ext.when
@@ -17,16 +16,15 @@ process SPLIT_FASTQ {
     script:
     def args = task.ext.args ?: ''
     def method = reads.extension == 'gz' ? 'zcat' : 'cat'
+    def output = reads.name.replaceAll(/f(ast)?q(.gz)?$/,"")
     """
-    for file in $reads $mates; do
-        $method \$file | split \\
-        -d \\
-        -l 320000000 \\
-        --additional-suffix .fastq \\
-        $args \\
-        - \\
-        \${file%f*q*}
-    done
+    $method $reads | split \\
+    -d \\
+    -l 320000000 \\
+    --additional-suffix .fastq \\
+    $args \\
+    - \\
+    $output
     """
 
     stub:

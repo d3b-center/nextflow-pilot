@@ -133,11 +133,11 @@ workflow {
     fastq_channel = fastq_channel.mix(CUTADAPT_PAIRED.out.reads.map{ meta, file -> [meta + ["single_end": false], file] })
 
     fastq_channel = fastq_channel.branch{ meta, file ->
-        split: file.size() > 10000000000
+        split: (file.extension == 'gz' && file.size() > 10000000000) || (file.extension != 'gz' && file.size() > 30000000000)
         pass: true
     }
 
-    SPLIT_FASTQ(fastq_channel.split.map{ meta, reads -> [meta, reads, []]})
+    SPLIT_FASTQ(fastq_channel.split)
 
     fq_align_channel = Channel.empty()
     fq_align_channel = fq_align_channel.mix(fastq_channel.pass)
@@ -150,19 +150,25 @@ workflow {
     bwa_mem_payloads = fq_align_channel.map { meta, file -> [meta + ["id": file.baseName], file, meta.rgline.replaceAll("\t", "\\\\t"), meta.interleaved] }
     BWA_MEM(bwa_mem_payloads, indexed_fasta)
 
-    bams_to_merge = BWA_MEM.out.aligned_bam.map { meta, file -> [["id": "temp.aligned.duplicates_marked.sorted"], file] }.groupTuple()
-    SAMBAMBA_MERGE(bams_to_merge)
+    aligned_bams = BWA_MEM.out.aligned_bam.map { _, file, index -> [["id": "temp.aligned.duplicates_marked.sorted"], file, index] }.groupTuple().branch{ meta, files, indexes ->
+        merge: files.size() > 1
+        pass: true
+    }
 
-    recal_channel = SAMBAMBA_MERGE.out.merged_bam.combine(sequence_intervals.filter { it.baseName != 'unmapped' }).map{ meta, bam, bai, interval -> [["id": interval.simpleName], bam, bai, interval] }
+    SAMBAMBA_MERGE(aligned_bams.merge.map{ meta, files, indexes -> [meta, files] })
 
+    merged_bams = Channel.empty()
+    merged_bams = merged_bams.mix(aligned_bams.pass)
+    merged_bams = merged_bams.mix(SAMBAMBA_MERGE.out.merged_bam)
+
+    recal_channel = merged_bams.combine(sequence_intervals.filter { it.baseName != 'unmapped' }).map{ meta, bam, bai, interval -> [["id": interval.simpleName], bam, bai, interval] }
     GATK4_BASERECALIBRATOR(recal_channel, ref_fasta.map{ file -> [[:], file]}, ref_fai.map{ file -> [[:], file]}, ref_dict.map{ file -> [[:], file]}, knownsites.map{ file -> [[:], file]}, knownsites_indexes.map{ file -> [[:], file]})
     GATK4_GATHERBQSRREPORTS(GATK4_BASERECALIBRATOR.out.table.map{ meta, file -> [file] }.collect().map{ file -> [["id": "temp"], file] })
 
-    bqsr_channel = SAMBAMBA_MERGE.out.merged_bam.combine(GATK4_GATHERBQSRREPORTS.out.table.map{ meta, file -> file }).combine(sequence_intervals).map{ meta, bam, bai, bqsr, interval -> [["id": interval.simpleName], bam, bai, bqsr, interval] }
-
+    bqsr_channel = merged_bams.combine(GATK4_GATHERBQSRREPORTS.out.table.map{ meta, file -> file }).combine(sequence_intervals).map{ meta, bam, bai, bqsr, interval -> [["id": interval.simpleName], bam, bai, bqsr, interval] }
     GATK4_APPLYBQSR(bqsr_channel, ref_fasta, ref_fai, ref_dict)
-    gather_channel = GATK4_APPLYBQSR.out.bam.map{ _, file -> file }.toSortedList{ a -> a.simpleName }.map{ files -> [["id": "temp"], files] }
 
+    gather_channel = GATK4_APPLYBQSR.out.bam.map{ _, file -> file }.toSortedList{ a -> a.simpleName }.map{ files -> [["id": "temp"], files] }
     PICARD_GATHERBAMFILES(gather_channel)
 
     SAMTOOLS_VIEW_CRAM(PICARD_GATHERBAMFILES.out.merged_bam, ref_fasta.map{ file -> [[:], file]}, Channel.value([]))
