@@ -12,7 +12,7 @@ process GATK4_BASERECALIBRATOR {
     path(known_sites_indexes)
 
     output:
-    tuple val(meta), path("*.recal_data.csv"),  emit: recalibration_table
+    tuple val(meta), path("*.recal_data.csv"),  emit: table
 
     when:
     task.ext.when == null || task.ext.when

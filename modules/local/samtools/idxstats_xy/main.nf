@@ -18,6 +18,7 @@ process SAMTOOLS_IDXSTATS_XY {
     def args = task.ext.args ?: ''
     """
     samtools \\
+        --threads ${task.cpus-1}
         idxstats \\
         $bam > ${prefix}.idxstats.txt \\
     && awk '{ \\

@@ -1,4 +1,5 @@
 process BIOBAMBAM_BAMTOFASTQ {
+    tag "$meta.id"
     container "pgc-images.sbgenomics.com/d3b-bixu/bwa-bundle:dev"
 
     input:

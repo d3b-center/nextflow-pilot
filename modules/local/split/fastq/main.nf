@@ -20,7 +20,7 @@ process SPLIT_FASTQ {
     """
     $method $reads | split \\
     -d \\
-    -l 320000000 \\
+    -l 160000000 \\
     --additional-suffix .fastq \\
     $args \\
     - \\

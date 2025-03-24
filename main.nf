@@ -12,9 +12,9 @@ include { SPLIT_FASTQ } from './modules/local/split/fastq/main'
 include { BWA_MEM } from './modules/local/bwa/mem/main'
 include { SAMBAMBA_MERGE } from './modules/local/sambamba/merge/main'
 include { PYTHON_CREATESEQUENCEGROUPS } from './modules/local/python/createsequencegroups/main'
-include { GATK4_BASERECALIBRATOR } from './modules/nf-core/gatk4/baserecalibrator/main'
+include { GATK4_BASERECALIBRATOR } from './modules/local/gatk/baserecalibrator/main'
 include { GATK4_GATHERBQSRREPORTS } from './modules/nf-core/gatk4/gatherbqsrreports/main'
-include { GATK4_APPLYBQSR } from './modules/nf-core/gatk4/applybqsr/main'
+include { GATK4_APPLYBQSR } from './modules/local/gatk/applybqsr/main'
 include { PICARD_GATHERBAMFILES } from './modules/local/picard/gatherbamfiles/main'
 include { PICARD_COLLECTALIGNMENTSUMMARYMETRICS } from './modules/local/picard/collectalignmentsummarymetrics/main'
 include { PICARD_COLLECTGCBIASMETRICS } from './modules/local/picard/collectgcbiasmetrics/main'
@@ -41,10 +41,8 @@ workflow {
     input_pe_reads = params.input_pe_reads_list ? Channel.fromPath(params.input_pe_reads_list.class == String ? params.input_pe_reads_list.split(',') as List : params.input_pe_reads_list) : Channel.empty()
     input_pe_mates = params.input_pe_mates_list ? Channel.fromPath(params.input_pe_mates_list.class == String ? params.input_pe_mates_list.split(',') as List : params.input_pe_mates_list) : Channel.empty()
     input_pe_rgs = params.input_pe_rgs_list ? Channel.fromList(params.input_pe_rgs_list.class == String ? params.input_pe_rgs_list.split(',') as List : params.input_pe_rgs_list) : Channel.empty()
-    input_pe_rgs.view{ "INPUT PE RG: $it" }
     input_se_reads = params.input_se_reads_list ? Channel.fromPath(params.input_se_reads_list.class == String ? params.input_se_reads_list.split(',') as List : params.input_se_reads_list) : Channel.empty()
     input_se_rgs = params.input_se_rgs_list ? Channel.fromList(params.input_se_rgs_list.class == String ? params.input_se_rgs_list.split(',') as List : params.input_se_rgs_list) : Channel.empty()
-    input_se_rgs.view{ "INPUT SE RG: $it" }
     cram_reference = params.cram_reference ? Channel.fromPath(params.cram_reference).first() : Channel.value([])
     reference_tar = Channel.fromPath(params.reference_tar).first()
     knownsites = params.knownsites ? Channel.fromPath(params.knownsites.class == String ? params.knownsites.split(',') as List : params.knownsites) : Channel.value([])
@@ -110,7 +108,7 @@ workflow {
     }
     CUTADAPT_INTERLEAVE_PEFQ(pe_fastq.pass.map{ meta, files -> [meta + ["single_end": true, "interleaved": true], files] })
 
-    SAMTOOLS_SPLIT(input_aligned_reads, cram_reference)
+    SAMTOOLS_SPLIT(input_aligned_reads.map { meta, file -> [meta + ["id": file.baseName], file] }, cram_reference)
 
     rg_bams = SAMTOOLS_SPLIT.out.rg_bams.transpose().map { meta, file -> [meta + ["id": file.baseName, "single_end": false, "interleaved": true], file] }
     SAMTOOLS_VIEW_RG(rg_bams.map{ meta, file -> [meta, file, []]}, Channel.value([[],[]]), Channel.value([]))
@@ -133,7 +131,7 @@ workflow {
     fastq_channel = fastq_channel.mix(CUTADAPT_PAIRED.out.reads.map{ meta, file -> [meta + ["single_end": false], file] })
 
     fastq_channel = fastq_channel.branch{ meta, file ->
-        split: (file.extension == 'gz' && file.size() > 10000000000) || (file.extension != 'gz' && file.size() > 30000000000)
+        split: (file.extension == 'gz' && file.size() > 10000000000) || (file.extension != 'gz' && file.size() > 20000000000)
         pass: true
     }
 
@@ -150,11 +148,12 @@ workflow {
     bwa_mem_payloads = fq_align_channel.map { meta, file -> [meta + ["id": file.baseName], file, meta.rgline.replaceAll("\t", "\\\\t"), meta.interleaved] }
     BWA_MEM(bwa_mem_payloads, indexed_fasta)
 
-    aligned_bams = BWA_MEM.out.aligned_bam.map { _, file, index -> [["id": "temp.aligned.duplicates_marked.sorted"], file, index] }.groupTuple().branch{ meta, files, indexes ->
+    aligned_bams = BWA_MEM.out.aligned_bam.map { _, file, index -> [["id": "temp.aligned.duplicates_marked.sorted"], file, index] }.groupTuple(sort: { a -> a.simpleName }).branch{ meta, files, indexes ->
         merge: files.size() > 1
         pass: true
     }
 
+    aligned_bams.merge.view{ "ALIGNED BAMS TO MERGE: $it" }
     SAMBAMBA_MERGE(aligned_bams.merge.map{ meta, files, indexes -> [meta, files] })
 
     merged_bams = Channel.empty()
@@ -162,13 +161,13 @@ workflow {
     merged_bams = merged_bams.mix(SAMBAMBA_MERGE.out.merged_bam)
 
     recal_channel = merged_bams.combine(sequence_intervals.filter { it.baseName != 'unmapped' }).map{ meta, bam, bai, interval -> [["id": interval.simpleName], bam, bai, interval] }
-    GATK4_BASERECALIBRATOR(recal_channel, ref_fasta.map{ file -> [[:], file]}, ref_fai.map{ file -> [[:], file]}, ref_dict.map{ file -> [[:], file]}, knownsites.map{ file -> [[:], file]}, knownsites_indexes.map{ file -> [[:], file]})
-    GATK4_GATHERBQSRREPORTS(GATK4_BASERECALIBRATOR.out.table.map{ meta, file -> [file] }.collect().map{ file -> [["id": "temp"], file] })
+    GATK4_BASERECALIBRATOR(recal_channel, ref_fasta, ref_fai, ref_dict, knownsites, knownsites_indexes)
+    GATK4_GATHERBQSRREPORTS(GATK4_BASERECALIBRATOR.out.table.map{ meta, file -> [["id": "gatherbqsr"], file] }.groupTuple(sort: { a -> a.simpleName }))
 
     bqsr_channel = merged_bams.combine(GATK4_GATHERBQSRREPORTS.out.table.map{ meta, file -> file }).combine(sequence_intervals).map{ meta, bam, bai, bqsr, interval -> [["id": interval.simpleName], bam, bai, bqsr, interval] }
     GATK4_APPLYBQSR(bqsr_channel, ref_fasta, ref_fai, ref_dict)
 
-    gather_channel = GATK4_APPLYBQSR.out.bam.map{ _, file -> file }.toSortedList{ a -> a.simpleName }.map{ files -> [["id": "temp"], files] }
+    gather_channel = GATK4_APPLYBQSR.out.bam.map{ file -> [["id": "gatherbam"], file] }.groupTuple(sort: { a -> a.simpleName } )
     PICARD_GATHERBAMFILES(gather_channel)
 
     SAMTOOLS_VIEW_CRAM(PICARD_GATHERBAMFILES.out.merged_bam, ref_fasta.map{ file -> [[:], file]}, Channel.value([]))
@@ -202,7 +201,7 @@ workflow {
     haplotyper_channel = PICARD_GATHERBAMFILES.out.merged_bam.combine(GATK4_INTERVALLISTTOOLS.out.interval_list.map{ _, files -> files }.flatten())
     haplotyper_channel = haplotyper_channel.map { meta, bam, bai, interval -> [["id": interval.parent.toString().split('/').last()], bam, bai, interval] }
     GATK4_HAPLOTYPECALLER(haplotyper_channel, ref_fasta, ref_fai, ref_dict, contamination)
-    GATK4_MERGEVCFS(GATK4_HAPLOTYPECALLER.out.germline_vcf.map { meta, vcf, tbi -> [["id": "temp"], vcf] }.groupTuple(), Channel.value([[],[]]))
+    GATK4_MERGEVCFS(GATK4_HAPLOTYPECALLER.out.germline_vcf.map { meta, vcf, index -> [["id": "mergevcf"], vcf] }.groupTuple(sort: { a -> a.simpleName }), Channel.value([[],[]]))
     if (params.biospecimen_name) {
         PICARD_RENAMESAMPLEINVCF(GATK4_MERGEVCFS.out.vcf.map { meta, file -> [["id": params.biospecimen_name], file] })
         TABIX_TABIX_GVCF(PICARD_RENAMESAMPLEINVCF.out.vcf)

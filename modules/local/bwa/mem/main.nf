@@ -1,4 +1,5 @@
 process BWA_MEM {
+    tag "$meta.id"
     label 'process_high'
     container "pgc-images.sbgenomics.com/d3b-bixu/bwa-kf-bundle:0.1.17"
 
