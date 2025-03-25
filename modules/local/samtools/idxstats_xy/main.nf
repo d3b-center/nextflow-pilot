@@ -18,8 +18,8 @@ process SAMTOOLS_IDXSTATS_XY {
     def args = task.ext.args ?: ''
     """
     samtools \\
-        --threads ${task.cpus-1}
         idxstats \\
+        --threads ${task.cpus-1} \\
         $bam > ${prefix}.idxstats.txt \\
     && awk '{ \\
         if(\$1 == "chrX") {x_rat = \$3/\$2; X_reads = \$3;}; \\

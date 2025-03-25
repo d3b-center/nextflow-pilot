@@ -1,4 +1,5 @@
 process SAMBAMBA_MERGE {
+    tag "$meta.id"
     label 'process_low'
     container "images.sbgenomics.com/bogdang/sambamba:0.6.3"
 

@@ -42,7 +42,7 @@ process BWA_MEM {
     | /opt/sambamba_0.6.3/sambamba_v0.6.3 sort \\
         -t $task.cpus \\
         -m ${Math.floor(task.memory.toGiga() / 4) as int}GiB \\
-        -o ${prefix}.unsorted.bam \\
+        -o ${prefix}.sorted.bam \\
         $args4 \\
         /dev/stdin
     """
