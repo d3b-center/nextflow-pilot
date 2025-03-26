@@ -10,18 +10,20 @@ params.input_pe_mates_list = ""
 params.input_pe_rgs_list = ""
 params.input_se_reads_list = ""
 params.input_se_rgs_list = ""
+params.in = ""
+params.in2 = ""
+params.in3 = ""
 
 /*
  * Define the workflow
  */
 workflow {
-  ch = Channel.of(1,2,3,4,5)
-  ch = ch.branch { v ->
-    low: v <= 3
-    high: v >= 3
-  }
-  ch.low.view{ "LOW $it" }
-  ch.high.view{ "HIGH $it" }
+  f1 = params.in ? Channel.fromPath(params.in).map{ file -> [0, file] } : Channel.empty()
+  f2 = params.in2 ? Channel.fromPath(params.in2).map{ file -> [0, file] } : Channel.empty()
+  f3 = params.in3 ? Channel.fromPath(params.in3).map{ file -> [0, file] } : Channel.empty()
+  ch = f1.concat(f2, f3)
+  ch.view()
+  ch.groupTuple(sort: true).view()
   // in_se_r = params.input_se_reads_list ? Channel.fromPath(params.input_se_reads_list) : Channel.empty()
   // in_pe_r = Channel.fromPath(params.input_pe_reads_list)
   // in_pe_m = Channel.fromPath(params.input_pe_mates_list)
