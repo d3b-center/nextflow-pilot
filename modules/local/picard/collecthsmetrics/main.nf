@@ -4,7 +4,7 @@ process PICARD_COLLECTHSMETRICS {
     container 'pgc-images.sbgenomics.com/d3b-bixu/picard:2.18.9R'
 
     input:
-    tuple val(meta), path(bam), path(bai)
+    tuple val(meta), path(reads), path(index)
     path(fasta)
     path(fai)
     path(bait_intervals)
@@ -22,7 +22,7 @@ process PICARD_COLLECTHSMETRICS {
     """
     java -Xmx${(task.memory.mega*0.8).intValue()}M -jar /picard.jar \\
         CollectHsMetrics \\
-        INPUT=${bam} \\
+        INPUT=${reads} \\
         REFERENCE_SEQUENCE=${fasta} \\
         BAIT_INTERVALS=${bait_intervals} \\
         TARGET_INTERVALS=${target_intervals} \\

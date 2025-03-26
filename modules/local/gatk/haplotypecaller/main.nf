@@ -4,7 +4,7 @@ process GATK4_HAPLOTYPECALLER {
     container 'pgc-images.sbgenomics.com/d3b-bixu/gatk:4.beta.1-3.5'
 
     input:
-    tuple val(meta), path(input_bam), path(input_bam_index), path(sequence_interval)
+    tuple val(meta), path(reads), path(index), path(sequence_interval)
     path(fasta)
     path(fai)
     path(dict)
@@ -23,7 +23,7 @@ process GATK4_HAPLOTYPECALLER {
     """
     /gatk-launch --javaOptions "-Xmx${(task.memory.mega*0.8).intValue()}M" \\
         PrintReads \\
-        -I $input_bam \\
+        -I $reads \\
         -L $sequence_interval \\
         -O local.sharded.bam \\
         $args \\

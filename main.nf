@@ -61,7 +61,7 @@ workflow {
     if (params.dbsnp_idx) {
         dbsnp_idx = Channel.fromPath(params.dbsnp_idx).first()
     } else {
-        GATK4_INDEXFEATUREFILE(dbsnp_vcf.map{ file -> [[:], file] })
+        GATK4_INDEXFEATUREFILE(dbsnp_vcf.map{ file -> [["id": ''], file] })
         dbsnp_idx = GATK4_INDEXFEATUREFILE.out.index.map{ _, file -> file }
     }
 
@@ -73,7 +73,7 @@ workflow {
         indexed: index != null
         unindexed: index == null
     }
-    TABIX_TABIX(knownsite.unindexed.map{ meta, file, _ -> [[:], file]})
+    TABIX_TABIX(knownsite.unindexed.map{ meta, file, _ -> [["id": ''], file]})
     knownsites_indexes = TABIX_TABIX.out.tbi.map{ _, file -> file}.concat(knownsites_indexes).collect()
     knownsites = knownsites.collect()
 
@@ -95,20 +95,20 @@ workflow {
     sequence_intervals = PYTHON_CREATESEQUENCEGROUPS.out.intervals.flatten()
 
     // Prepare Reads for BWA
-    se_fastq = input_se_rgs.merge(input_se_reads). map { rg, read -> [["rgid": rg.replaceAll('\\\\t','\t').split('\t').find{ it.startsWith('ID') }.replaceFirst('ID:', ""), "rgline": rg, "single_end": true, "interleaved": false], read] }.branch{ ch ->
+    se_fastq = input_se_rgs.merge(input_se_reads). map { rg, read -> [["id": '', "rgid": rg.replaceAll('\\\\t','\t').split('\t').find{ it.startsWith('ID') }.replaceFirst('ID:', ""), "rgline": rg, "single_end": true, "interleaved": false], read] }.branch{ ch ->
         trim: (params.cutadapt_r1_adapter || params.cutadapt_quality_base || params.cutadapt_quality_cutoff)
         pass: true
     }
     CUTADAPT_SINGLE(se_fastq.trim)
 
-    pe_fastq = input_pe_rgs.merge(input_pe_reads, input_pe_mates).map { rg, read, mate -> [["rgid": rg.replaceAll('\\\\t','\t').split('\t').find{ it.startsWith('ID') }.replaceFirst('ID:', ""), "rgline": rg, "single_end": false, "interleaved": false], [read, mate]] }
+    pe_fastq = input_pe_rgs.merge(input_pe_reads, input_pe_mates).map { rg, read, mate -> [["id": '', "rgid": rg.replaceAll('\\\\t','\t').split('\t').find{ it.startsWith('ID') }.replaceFirst('ID:', ""), "rgline": rg, "single_end": false, "interleaved": false], [read, mate]] }
     pe_fastq = pe_fastq.branch { meta, files ->
         trim: (params.cutadapt_r1_adapter || params.cutadapt_r2_adapter || params.cutadapt_quality_base || params.cutadapt_quality_cutoff)
         pass: true
     }
     CUTADAPT_INTERLEAVE_PEFQ(pe_fastq.pass.map{ meta, files -> [meta + ["single_end": true, "interleaved": true], files] })
 
-    SAMTOOLS_SPLIT(input_aligned_reads.map { file -> [["inbam": file.baseName], file] }, cram_reference)
+    SAMTOOLS_SPLIT(input_aligned_reads.map { file -> [["id": '', "inbam": file.baseName], file] }, cram_reference)
 
     rg_bams = SAMTOOLS_SPLIT.out.rg_bams.transpose().map { meta, file -> [meta + ["rgid": file.baseName, "single_end": false, "interleaved": true], file] }
     SAMTOOLS_VIEW_RG(rg_bams.map{ meta, file -> [meta, file, []]}, Channel.value([[],[]]), Channel.value([]))
@@ -148,7 +148,7 @@ workflow {
     bwa_mem_payloads = fq_align_channel.map { meta, file -> [meta, file, meta.rgline.replaceAll("\t", "\\\\t"), meta.interleaved] }
     BWA_MEM(bwa_mem_payloads, indexed_fasta)
 
-    aligned_bams = BWA_MEM.out.aligned_bam.map { _m, file, index -> [[:], file, index] }.groupTuple(sort: { a -> a.name }).branch{ _m, files, _i ->
+    aligned_bams = BWA_MEM.out.aligned_bam.map { _m, file, index -> [["id": ''], file, index] }.groupTuple(sort: { a -> a.name }).branch{ _m, files, _i ->
         merge: files.size() > 1
         pass: true
     }
@@ -166,7 +166,7 @@ workflow {
     bqsr_channel = merged_bams.combine(GATK4_GATHERBQSRREPORTS.out.table.map{ meta, file -> file }).combine(sequence_intervals)
     GATK4_APPLYBQSR(bqsr_channel, ref_fasta, ref_fai, ref_dict)
 
-    gather_channel = GATK4_APPLYBQSR.out.bam.map{ file -> [[:], file] }.groupTuple(sort: { a -> a.name } )
+    gather_channel = GATK4_APPLYBQSR.out.bam.map{ file -> [["id": ''], file] }.groupTuple(sort: { a -> a.name } )
     PICARD_GATHERBAMFILES(gather_channel)
 
     SAMTOOLS_VIEW_CRAM(PICARD_GATHERBAMFILES.out.merged_bam, ref_fasta.map{ file -> [[:], file]}, Channel.value([]))
@@ -195,12 +195,12 @@ workflow {
       contamination = VERIFYBAMID_VERIFYBAMID2.out.self_sm.map { meta, tsv -> tsv }.splitCsv(header: true, sep: '\t').filter { row -> row.'FREEMIX(alpha)' != null }.first().map { v -> v.'FREEMIX(alpha)'.toFloat() / 0.75 }
     }
 
-    GATK4_INTERVALLISTTOOLS(calling_intervallist.map{ file -> [[:], file]})
+    GATK4_INTERVALLISTTOOLS(calling_intervallist.map{ file -> [["id": ''], file]})
 
     haplotyper_channel = PICARD_GATHERBAMFILES.out.merged_bam.combine(GATK4_INTERVALLISTTOOLS.out.interval_list.map{ _, files -> files }.flatten())
-    haplotyper_channel = haplotyper_channel.map { _, bam, bai, interval -> [["inid": interval.parent.toString().split('/').last()], bam, bai, interval] }
+    haplotyper_channel = haplotyper_channel.map { meta, bam, bai, interval -> [meta + ["inid": interval.parent.toString().split('/').last()], bam, bai, interval] }
     GATK4_HAPLOTYPECALLER(haplotyper_channel, ref_fasta, ref_fai, ref_dict, contamination)
-    GATK4_MERGEVCFS(GATK4_HAPLOTYPECALLER.out.germline_vcf.map { _m, vcf, _i -> [[:], vcf] }.groupTuple(sort: { a -> a.name }), Channel.value([[],[]]))
+    GATK4_MERGEVCFS(GATK4_HAPLOTYPECALLER.out.germline_vcf.map { _m, vcf, _i -> [["id": ''], vcf] }.groupTuple(sort: { a -> a.name }), Channel.value([[],[]]))
     if (params.biospecimen_name) {
         PICARD_RENAMESAMPLEINVCF(GATK4_MERGEVCFS.out.vcf.map { _, file -> [["id": params.biospecimen_name], file] })
         TABIX_TABIX_GVCF(PICARD_RENAMESAMPLEINVCF.out.vcf)

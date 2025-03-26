@@ -4,7 +4,7 @@ process PICARD_COLLECTWGSMETRICS {
     container 'pgc-images.sbgenomics.com/d3b-bixu/picard:2.18.9R'
 
     input:
-    tuple val(meta), path(bam), path(bai)
+    tuple val(meta), path(reads), path(index)
     path(fasta)
     path(fai)
     path(intervallist)
@@ -21,7 +21,7 @@ process PICARD_COLLECTWGSMETRICS {
     """
     java -Xmx${(task.memory.mega*0.8).intValue()}M -jar /picard.jar \\
         CollectWgsMetrics \\
-        INPUT=${bam} \\
+        INPUT=${reads} \\
         OUTPUT=${prefix}.wgs_metrics \\
         REFERENCE_SEQUENCE=${fasta} \\
         INTERVALS=${intervallist} \\

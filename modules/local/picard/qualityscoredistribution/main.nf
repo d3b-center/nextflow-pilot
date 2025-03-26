@@ -4,7 +4,7 @@ process PICARD_QUALITYSCOREDISTRIBUTION {
     container 'pgc-images.sbgenomics.com/d3b-bixu/picard:2.18.9R'
 
     input:
-    tuple val(meta), path(bam), path(bai)
+    tuple val(meta), path(reads), path(index)
     path(fasta)
     path(fai)
 
@@ -21,7 +21,7 @@ process PICARD_QUALITYSCOREDISTRIBUTION {
     """
     java -Xmx${(task.memory.mega*0.8).intValue()}M -jar /picard.jar \\
         QualityScoreDistribution \\
-        INPUT=${bam} \\
+        INPUT=${reads} \\
         OUTPUT=${prefix}.qual_score_dist.txt \\
         CHART_OUTPUT=${prefix}.qual_score_dist.pdf \\
         $args
