@@ -4,16 +4,15 @@ process GATK4_APPLYBQSR {
     container 'pgc-images.sbgenomics.com/d3b-bixu/gatk:4.0.3.0'
 
     input:
-    tuple val(meta), path(input_bam), path(input_bam_index), path(sequence_interval)
+    tuple val(meta), path(reads), path(index), path(bqsr_report), path(sequence_interval)
     path(fasta)
     path(fai)
     path(dict)
-    path(bqsr_report)
 
     output:
-    path("*.bam"), emit: recalibrated_bam
-    path("*.bai"), emit: recalibrated_bai
-    path("*.md5"), emit: recalibraded_bam_md5, optional: true
+    path("*.bam"), emit: bam
+    path("*.bai"), emit: bai
+    path("*.md5"), emit: md5, optional: true
 
     when:
     task.ext.when == null || task.ext.when
@@ -26,7 +25,7 @@ process GATK4_APPLYBQSR {
     /gatk --java-options "-Xmx${(task.memory.mega*0.8).intValue()}M" \\
         ApplyBQSR \\
         -R $fasta \\
-        -I $input_bam \\
+        -I $reads \\
         -O ${prefix}.aligned.duplicates_marked.recalibrated.bam \\
         -bqsr $bqsr_report \\
         $interval_command \\

@@ -4,7 +4,7 @@ process SAMTOOLS_IDXSTATS_XY {
     container "pgc-images.sbgenomics.com/d3b-bixu/samtools:1.9"
 
     input:
-    tuple val(meta), path(bam), path(bai)
+    tuple val(meta), path(reads), path(index)
 
     output:
     tuple val(meta), path('*.ratio.txt'), emit: xy_ratio
@@ -19,7 +19,8 @@ process SAMTOOLS_IDXSTATS_XY {
     """
     samtools \\
         idxstats \\
-        $bam > ${prefix}.idxstats.txt \\
+        --threads ${task.cpus-1} \\
+        $reads > ${prefix}.idxstats.txt \\
     && awk '{ \\
         if(\$1 == "chrX") {x_rat = \$3/\$2; X_reads = \$3;}; \\
         if(\$1 == "chrY") {y_rat = \$3/\$2; Y_reads = \$3;}; \\

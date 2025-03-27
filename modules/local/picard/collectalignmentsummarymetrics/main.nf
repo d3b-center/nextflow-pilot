@@ -4,7 +4,7 @@ process PICARD_COLLECTALIGNMENTSUMMARYMETRICS {
     container 'pgc-images.sbgenomics.com/d3b-bixu/picard:2.18.9R'
 
     input:
-    tuple val(meta), path(bam), path(bai)
+    tuple val(meta), path(reads), path(index)
     path(fasta)
     path(fai)
 
@@ -20,7 +20,7 @@ process PICARD_COLLECTALIGNMENTSUMMARYMETRICS {
     """
     java -Xmx${(task.memory.mega*0.8).intValue()}M -jar /picard.jar \\
         CollectAlignmentSummaryMetrics \\
-        INPUT=${bam} \\
+        INPUT=${reads} \\
         REFERENCE_SEQUENCE=${fasta} \\
         OUTPUT=${prefix}.alignment_summary_metrics \\
         $args

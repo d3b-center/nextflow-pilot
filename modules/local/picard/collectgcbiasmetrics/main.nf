@@ -4,7 +4,7 @@ process PICARD_COLLECTGCBIASMETRICS {
     container 'pgc-images.sbgenomics.com/d3b-bixu/picard:2.18.9R'
 
     input:
-    tuple val(meta), path(bam), path(bai)
+    tuple val(meta), path(reads), path(index)
     path(fasta)
     path(fai)
 
@@ -22,7 +22,7 @@ process PICARD_COLLECTGCBIASMETRICS {
     """
     java -Xmx${(task.memory.mega*0.8).intValue()}M -jar /picard.jar \\
         CollectGcBiasMetrics \\
-        INPUT=${bam} \\
+        INPUT=${reads} \\
         OUTPUT=${prefix}.gc_bias_metrics.txt \\
         SUMMARY_OUTPUT=${prefix}.gc_bias_summary_metrics.txt \\
         CHART_OUTPUT=${prefix}.gc_bias_metrics.pdf \\

@@ -1,4 +1,5 @@
 process BWA_MEM {
+    tag "$meta.id"
     label 'process_high'
     container "pgc-images.sbgenomics.com/d3b-bixu/bwa-kf-bundle:0.1.17"
 
@@ -7,7 +8,7 @@ process BWA_MEM {
     path(fasta)
 
     output:
-    tuple val(meta), path('*.bam'), emit: unsorted_bam
+    tuple val(meta), path('*.bam'), path('*.bai'), emit: aligned_bam
 
     when:
     task.ext.when == null || task.ext.when
@@ -41,7 +42,7 @@ process BWA_MEM {
     | /opt/sambamba_0.6.3/sambamba_v0.6.3 sort \\
         -t $task.cpus \\
         -m ${Math.floor(task.memory.toGiga() / 4) as int}GiB \\
-        -o ${prefix}.unsorted.bam \\
+        -o ${prefix}.sorted.bam \\
         $args4 \\
         /dev/stdin
     """

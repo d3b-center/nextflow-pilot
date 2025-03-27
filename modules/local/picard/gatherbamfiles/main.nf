@@ -4,7 +4,7 @@ process PICARD_GATHERBAMFILES {
     container 'pgc-images.sbgenomics.com/d3b-bixu/picard:2.18.9R'
 
     input:
-    tuple val(meta), path(input_bams), path(input_bam_indexes)
+    tuple val(meta), path(input_bams)
 
     output:
     tuple val(meta), path("*.bam"), path("*.bai"), emit: merged_bam

@@ -1,0 +1,117 @@
+{
+    "name": "",
+    "homePage": "",
+    "repos": {
+        "https://github.com/nf-core/modules.git": {
+            "modules": {
+                "nf-core": {
+                    "cutadapt": {
+                        "branch": "master",
+                        "git_sha": "81880787133db07d9b4c1febd152c090eb8325dc",
+                        "installed_by": [
+                            "modules"
+                        ]
+                    },
+                    "gatk4/applybqsr": {
+                        "branch": "master",
+                        "git_sha": "81880787133db07d9b4c1febd152c090eb8325dc",
+                        "installed_by": [
+                            "modules"
+                        ]
+                    },
+                    "gatk4/baserecalibrator": {
+                        "branch": "master",
+                        "git_sha": "81880787133db07d9b4c1febd152c090eb8325dc",
+                        "installed_by": [
+                            "modules"
+                        ]
+                    },
+                    "gatk4/gatherbqsrreports": {
+                        "branch": "master",
+                        "git_sha": "81880787133db07d9b4c1febd152c090eb8325dc",
+                        "installed_by": [
+                            "modules"
+                        ]
+                    },
+                    "gatk4/indexfeaturefile": {
+                        "branch": "master",
+                        "git_sha": "81880787133db07d9b4c1febd152c090eb8325dc",
+                        "installed_by": [
+                            "modules"
+                        ]
+                    },
+                    "gatk4/intervallisttools": {
+                        "branch": "master",
+                        "git_sha": "81880787133db07d9b4c1febd152c090eb8325dc",
+                        "installed_by": [
+                            "modules"
+                        ]
+                    },
+                    "gatk4/mergevcfs": {
+                        "branch": "master",
+                        "git_sha": "81880787133db07d9b4c1febd152c090eb8325dc",
+                        "installed_by": [
+                            "modules"
+                        ]
+                    },
+                    "picard/collecthsmetrics": {
+                        "branch": "master",
+                        "git_sha": "81880787133db07d9b4c1febd152c090eb8325dc",
+                        "installed_by": [
+                            "modules"
+                        ]
+                    },
+                    "picard/collectwgsmetrics": {
+                        "branch": "master",
+                        "git_sha": "81880787133db07d9b4c1febd152c090eb8325dc",
+                        "installed_by": [
+                            "modules"
+                        ]
+                    },
+                    "picard/renamesampleinvcf": {
+                        "branch": "master",
+                        "git_sha": "81880787133db07d9b4c1febd152c090eb8325dc",
+                        "installed_by": [
+                            "modules"
+                        ]
+                    },
+                    "samtools/idxstats": {
+                        "branch": "master",
+                        "git_sha": "2d20463181b1c38981a02e90d3084b5f9fa8d540",
+                        "installed_by": [
+                            "modules"
+                        ]
+                    },
+                    "samtools/view": {
+                        "branch": "master",
+                        "git_sha": "b21df1b4e806f7bf3aff0eb41d84453a0025b43e",
+                        "installed_by": [
+                            "modules"
+                        ]
+                    },
+                    "tabix/tabix": {
+                        "branch": "master",
+                        "git_sha": "81880787133db07d9b4c1febd152c090eb8325dc",
+                        "installed_by": [
+                            "modules"
+                        ]
+                    },
+                    "untar": {
+                        "branch": "master",
+                        "git_sha": "81880787133db07d9b4c1febd152c090eb8325dc",
+                        "installed_by": [
+                            "modules"
+                        ]
+                    },
+                    "verifybamid/verifybamid2": {
+                        "branch": "master",
+                        "git_sha": "791d6b519889737f5fffb4e665ab1489b863161f",
+                        "installed_by": [
+                            "modules"
+                        ]
+                    }
+                }
+            }
+        }
+    }
+}

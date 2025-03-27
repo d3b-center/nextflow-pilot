@@ -4,7 +4,7 @@ process PICARD_COLLECTINSERTSIZEMETRICS {
     container 'pgc-images.sbgenomics.com/d3b-bixu/picard:2.18.9R'
 
     input:
-    tuple val(meta), path(bam), path(bai)
+    tuple val(meta), path(reads), path(index)
     path(fasta)
     path(fai)
 
@@ -21,7 +21,7 @@ process PICARD_COLLECTINSERTSIZEMETRICS {
     """
     java -Xmx${(task.memory.mega*0.8).intValue()}M -jar /picard.jar \\
         CollectInsertSizeMetrics \\
-        INPUT=${bam} \\
+        INPUT=${reads} \\
         OUTPUT=${prefix}.insert_size_metrics \\
         HISTOGRAM_FILE=${prefix}.insert_size_Histogram.pdf \\
         REFERENCE_SEQUENCE=${fasta} \\

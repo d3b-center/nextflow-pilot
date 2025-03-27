@@ -1,4 +1,5 @@
 process SAMBAMBA_MERGE {
+    tag "$meta.id"
     label 'process_low'
     container "images.sbgenomics.com/bogdang/sambamba:0.6.3"
 
@@ -6,7 +7,7 @@ process SAMBAMBA_MERGE {
     tuple val(meta), path(reads)
 
     output:
-    tuple val(meta), path('*.bam'), emit: merged_bam
+    tuple val(meta), path('*.bam'), path('*.bai'), emit: merged_bam
 
     when:
     task.ext.when == null || task.ext.when

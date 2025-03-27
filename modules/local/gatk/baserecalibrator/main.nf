@@ -4,7 +4,7 @@ process GATK4_BASERECALIBRATOR {
     container 'pgc-images.sbgenomics.com/d3b-bixu/gatk:4.0.3.0'
 
     input:
-    tuple val(meta), path(input_bam), path(input_bam_index), path(sequence_interval)
+    tuple val(meta), path(reads), path(index), path(sequence_interval)
     path(fasta)
     path(fai)
     path(dict)
@@ -12,7 +12,7 @@ process GATK4_BASERECALIBRATOR {
     path(known_sites_indexes)
 
     output:
-    tuple val(meta), path("*.recal_data.csv"),  emit: recalibration_table
+    tuple val(meta), path("*.recal_data.csv"),  emit: table
 
     when:
     task.ext.when == null || task.ext.when
@@ -26,7 +26,7 @@ process GATK4_BASERECALIBRATOR {
     /gatk --java-options "-Xmx${(task.memory.mega*0.8).intValue()}M" \\
         BaseRecalibrator \\
         -R $fasta \\
-        -I $input_bam \\
+        -I $reads \\
         $interval_command \\
         $sites_command \\
         -O ${prefix}.recal_data.csv \\
